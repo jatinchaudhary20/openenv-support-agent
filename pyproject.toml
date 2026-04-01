@@ -5,11 +5,18 @@ description = "Customer support OpenEnv environment"
 authors = [
   { name = "Jatin Chaudhary" }
 ]
+
+requires-python = ">=3.10"   # ✅ ADD THIS LINE
+
 dependencies = [
   "fastapi",
   "uvicorn",
-  "pydantic"
+  "pydantic",
+  "openenv-core>=0.2.0"
 ]
 
+[project.scripts]
+server = "server.app:app"
+
 [tool.openenv]
-entrypoint = "app:app"
+entrypoint = "server.app:app"
