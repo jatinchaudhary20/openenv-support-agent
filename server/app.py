@@ -6,6 +6,7 @@ sys.path.append(os.getcwd())
 from fastapi import FastAPI
 from env.support_env import SupportEnv
 from env.models import Action
+import uvicorn
 
 app = FastAPI()
 
@@ -37,3 +38,11 @@ def step(action: str):
 @app.get("/state")
 def get_state():
     return env.state.dict()
+
+
+def main():
+    uvicorn.run(app, host="0.0.0.0", port=7860)
+
+
+if __name__ == "__main__":
+    main()
