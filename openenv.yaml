@@ -1,2 +1,26 @@
 name: support-agent
-description: customer support environment
+description: Customer support ticket resolution environment
+
+entrypoint: app:app
+
+tasks:
+  - name: easy
+    description: Simple billing issue
+  - name: medium
+    description: Refund issue
+  - name: hard
+    description: Technical issue
+
+actions:
+  - classify
+  - respond
+  - resolve
+  - escalate
+
+observation_space:
+  ticket: string
+  category: string
+  response: string
+  resolved: boolean
+
+reward_range: [-1, 1]
