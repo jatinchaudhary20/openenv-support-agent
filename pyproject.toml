@@ -1,0 +1,15 @@
+[project]
+name = "openenv-support-agent"
+version = "0.1.0"
+description = "Customer support OpenEnv environment"
+authors = [
+  { name = "Jatin Chaudhary" }
+]
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "pydantic"
+]
+
+[tool.openenv]
+entrypoint = "app:app"
