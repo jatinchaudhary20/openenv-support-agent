@@ -1,0 +1,1 @@
+TASKS = ["easy", "medium", "hard"]
