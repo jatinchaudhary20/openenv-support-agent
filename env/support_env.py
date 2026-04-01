@@ -1,71 +1,50 @@
 from env.models import State, Action
 
+
 class SupportEnv:
     def __init__(self):
         self.state = None
-        self.task = None
-        self.expected_category = None
 
     def reset(self, task="easy"):
-        self.task = task
-
         if task == "easy":
-            self.state = State(ticket="Payment failed but money deducted")
-            self.expected_category = "billing"
-
+            ticket = "Payment failed but money deducted"
         elif task == "medium":
-            self.state = State(ticket="I want refund for wrong product delivered")
-            self.expected_category = "refund"
+            ticket = "Received wrong product, want refund"
+        else:
+            ticket = "App crashes when I open it"
 
-        elif task == "hard":
-            self.state = State(ticket="App crashed after payment and I was charged twice")
-            self.expected_category = "technical"
-
+        self.state = State(ticket=ticket)
         return self.state
 
     def step(self, action: Action):
         action_str = action.action_str.lower()
-
         reward = 0
         done = False
 
-        # CLASSIFY
-        if "classify" in action_str:
-            if self.state.category is not None:
-                reward -= 1
-            elif self.expected_category in action_str:
-                reward += 1
-                self.state.category = self.expected_category
-            else:
-                reward -= 0.5
-
-        # RESPOND
-        elif "respond" in action_str:
-            if self.state.category is None:
-                reward -= 1
-            else:
-                score = 0
-                if "sorry" in action_str:
-                    score += 0.3
+        if action_str.startswith("classify"):
+            if "payment" in self.state.ticket.lower():
+                if "billing" in action_str:
+                    self.state.category = "billing"
+                    reward = 1
+            elif "refund" in self.state.ticket.lower() or "wrong" in self.state.ticket.lower():
                 if "refund" in action_str:
-                    score += 0.3
-                if len(action_str) > 20:
-                    score += 0.4
+                    self.state.category = "refund"
+                    reward = 1
+            else:
+                if "technical" in action_str:
+                    self.state.category = "technical"
+                    reward = 1
 
-                reward += score
-                self.state.response = action_str
+        elif action_str.startswith("respond"):
+            self.state.response = action_str
+            reward = 1
 
-        # RESOLVE
-        elif "resolve" in action_str:
-            if self.state.category and self.state.response:
-                reward += 2
+        elif action_str.startswith("resolve"):
+            if self.state.response:
                 self.state.resolved = True
+                reward = 1
                 done = True
             else:
-                reward -= 1
-
-        # ESCALATE
-        elif "escalate" in action_str:
-            reward -= 0.5
+                reward = -1
 
         return self.state, reward, done, {}

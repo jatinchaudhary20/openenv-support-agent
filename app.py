@@ -1,3 +1,8 @@
+import sys
+import os
+
+sys.path.append(os.getcwd())
+
 from fastapi import FastAPI
 from env.support_env import SupportEnv
 from env.models import Action
@@ -5,6 +10,11 @@ from env.models import Action
 app = FastAPI()
 
 env = SupportEnv()
+
+
+@app.get("/")
+def root():
+    return {"message": "API running"}
 
 
 @app.post("/reset")

@@ -1,19 +1,2 @@
-name: openenv-support-agent
-version: 1.0
-
-tasks:
-  - easy
-  - medium
-  - hard
-
-observation_space:
-  ticket: string
-  category: string
-  response: string
-  resolved: boolean
-
-action_space:
-  - classify
-  - respond
-  - resolve
-  - escalate
+name: support-agent
+description: customer support environment
