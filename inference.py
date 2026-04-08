@@ -68,12 +68,11 @@ def run_baseline():
                     temperature=0.2,
                 )
                 text = response.choices[0].message.content
-            except Exception as e:
+            except Exception:
                 text = "escalate()"
 
             action_str = parse_action(text)
 
-            # fallback logic (safety)
             if state.category is None:
                 if "payment" in state.ticket.lower():
                     action_str = "classify('billing')"
@@ -94,7 +93,11 @@ def run_baseline():
             if done:
                 break
 
-        print(f"[END] task={task} score={total_reward} steps={step}", flush=True)
+        max_reward = 3  
+        normalized_score = total_reward / max_reward
+        normalized_score = max(0.01, min(0.99, normalized_score))
+
+        print(f"[END] task={task} score={normalized_score} steps={step}", flush=True)
 
 
 if __name__ == "__main__":
