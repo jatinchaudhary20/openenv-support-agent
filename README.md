@@ -58,6 +58,22 @@ streamlit run streamlit_app.py
 
 Open `http://localhost:8501`.
 
+## Hugging Face Deployment (Best Practice)
+Use two Spaces:
+
+1) **API Space (Docker)**  
+- Keep this repository as the API Space (`sdk: docker`).
+- It serves OpenEnv endpoints from `server.app` on port `7860`.
+
+2) **Frontend Space (Streamlit)**  
+- Create a second Streamlit Space.
+- Copy `streamlit_app.py` and `requirements-frontend.txt` into that Space.
+- In Streamlit Space settings, add environment variable:
+  - `OPENENV_API_BASE_URL=https://<your-api-space>.hf.space`
+- Or set it in UI field `Backend API Base URL`.
+
+This gives a clean demo UX while keeping the environment independently runnable as an API.
+
 ## Run Baseline Inference
 ```bash
 source .venv/bin/activate

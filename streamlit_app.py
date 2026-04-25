@@ -1,4 +1,5 @@
 import json
+import os
 import random
 from typing import Any, Dict, Tuple
 
@@ -6,15 +7,16 @@ import requests
 import streamlit as st
 
 
-API_BASE_URL = "http://localhost:7860"
+DEFAULT_API_BASE_URL = os.getenv("OPENENV_API_BASE_URL", "http://localhost:7860")
 MAX_STEPS = 5
 
 
 def _post_json(path: str, payload: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
     """POST helper with graceful error handling."""
+    api_base_url = st.session_state.get("api_base_url", DEFAULT_API_BASE_URL).rstrip("/")
     try:
         response = requests.post(
-            f"{API_BASE_URL}{path}",
+            f"{api_base_url}{path}",
             json=payload,
             timeout=20,
         )
@@ -215,12 +217,15 @@ if "model_temperature" not in st.session_state:
     st.session_state.model_temperature = 0.2
 if "deterministic_mode" not in st.session_state:
     st.session_state.deterministic_mode = False
+if "api_base_url" not in st.session_state:
+    st.session_state.api_base_url = DEFAULT_API_BASE_URL
 
 
 left, right = st.columns([1, 2])
 
 with left:
     st.subheader("Controls")
+    st.text_input("Backend API Base URL", key="api_base_url")
     st.text_input("HF Token (optional, model-first if set)", key="hf_token", type="password")
     st.text_input("HF Model", key="hf_model_name")
     st.slider("Model Temperature", min_value=0.0, max_value=1.0, step=0.1, key="model_temperature")
