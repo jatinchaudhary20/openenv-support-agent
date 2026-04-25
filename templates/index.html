@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenEnv Support Agent Demo</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+      h1 { margin-top: 0; }
+      .grid { display: grid; grid-template-columns: 360px 1fr; gap: 24px; }
+      textarea { width: 100%; min-height: 120px; }
+      button { margin-top: 8px; margin-right: 8px; padding: 8px 12px; }
+      .panel { border: 1px solid #ddd; border-radius: 8px; padding: 12px; }
+      .muted { color: #666; font-size: 13px; }
+      pre { background: #f7f7f7; padding: 8px; border-radius: 6px; overflow: auto; }
+      .ok { color: #0a7d24; }
+      .bad { color: #b00020; }
+    </style>
+  </head>
+  <body>
+    <h1>OpenEnv Support Agent Demo</h1>
+    <p class="muted">Single-space frontend + API demo. Uses /reset and /step.</p>
+    <div class="grid">
+      <div class="panel">
+        <label for="ticket"><strong>Ticket Input</strong></label>
+        <textarea id="ticket">Payment failed but money deducted</textarea>
+        <div>
+          <button id="resetBtn">Reset Environment</button>
+          <button id="runBtn">Run Agent</button>
+        </div>
+        <p id="status" class="muted">Idle</p>
+        <hr />
+        <p><strong>Total Score:</strong> <span id="score">0</span></p>
+        <p><strong>Resolved:</strong> <span id="resolved">no</span></p>
+        <p><strong>Steps:</strong> <span id="steps">0</span></p>
+      </div>
+      <div class="panel">
+        <strong>Step Logs</strong>
+        <div id="logs"></div>
+      </div>
+    </div>
+
+    <script>
+      const MAX_STEPS = 5;
+      let state = {};
+      let totalScore = 0;
+      let logs = [];
+
+      const statusEl = document.getElementById("status");
+      const scoreEl = document.getElementById("score");
+      const resolvedEl = document.getElementById("resolved");
+      const stepsEl = document.getElementById("steps");
+      const logsEl = document.getElementById("logs");
+
+      function expectedLabels(ticket) {
+        const t = (ticket || "").toLowerCase();
+        if (t.includes("payment")) return ["billing", "medium"];
+        if (t.includes("refund") || t.includes("wrong")) return ["refund", "medium"];
+        return ["technical", "high"];
+      }
+
+      function rewardForAction(st, tool, args) {
+        let c = 0, p = 0, e = 0, pen = 0;
+        if (tool === "classify") {
+          const [ec, ep] = expectedLabels(st.ticket || "");
+          c = args.category === ec ? 1 : -0.5;
+          p = args.priority === ep ? 1 : -0.5;
+        } else if (tool === "respond") {
+          const msg = (args.message || "").toLowerCase();
+          const empathyTerms = ["sorry","understand","apologize","thanks","assist"];
+          e = empathyTerms.some(x => msg.includes(x)) ? 1 : 0.2;
+        } else if (tool === "resolve") {
+          pen = st.category && st.priority && st.response ? 2 : -1;
+        }
+        return { classification: c, priority: p, empathy: e, penalty: pen, total: c + p + e + pen };
+      }
+
+      function applyAction(st, tool, args) {
+        const next = { ...st };
+        if (tool === "classify") {
+          next.category = args.category;
+          next.priority = args.priority;
+        } else if (tool === "respond") {
+          next.response = args.message;
+        } else if (tool === "resolve") {
+          if (next.category && next.priority && next.response) next.resolved = true;
+        }
+        return next;
+      }
+
+      function chooseAction(st) {
+        const ticket = (st.ticket || "").toLowerCase();
+        if (!st.category) {
+          if (ticket.includes("payment")) return { tool_name: "classify", arguments: { category: "billing", priority: "medium" } };
+          if (ticket.includes("refund") || ticket.includes("wrong")) return { tool_name: "classify", arguments: { category: "refund", priority: "medium" } };
+          return { tool_name: "classify", arguments: { category: "technical", priority: "high" } };
+        }
+        if (!st.response) return { tool_name: "respond", arguments: { message: "I understand your issue and I am sorry for the inconvenience. We are fixing this now." } };
+        return { tool_name: "resolve", arguments: {} };
+      }
+
+      function render() {
+        scoreEl.textContent = totalScore.toFixed(2);
+        resolvedEl.textContent = state.resolved ? "yes" : "no";
+        stepsEl.textContent = String(logs.length);
+        logsEl.innerHTML = logs.map((l) => `
+          <div style="border-top:1px solid #eee; padding-top:8px; margin-top:8px;">
+            <div><strong>Step ${l.step}</strong></div>
+            <div>Action: <code>${JSON.stringify(l.action)}</code></div>
+            <div>Reward: <strong>${l.reward.toFixed(2)}</strong></div>
+            <div>Breakdown: <code>${JSON.stringify(l.breakdown)}</code></div>
+            <pre>${JSON.stringify(l.state, null, 2)}</pre>
+          </div>
+        `).join("");
+      }
+
+      async function postJson(path, body) {
+        const r = await fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        if (!r.ok) {
+          const txt = await r.text();
+          throw new Error(`${path} failed: ${r.status} ${txt}`);
+        }
+        return r.json();
+      }
+
+      document.getElementById("resetBtn").addEventListener("click", async () => {
+        try {
+          const ticket = document.getElementById("ticket").value.trim();
+          if (!ticket) throw new Error("Please enter a ticket.");
+          statusEl.textContent = "Resetting...";
+          await postJson("/reset", { ticket });
+          state = { ticket, category: null, priority: null, response: null, resolved: false };
+          totalScore = 0;
+          logs = [];
+          render();
+          statusEl.textContent = "Environment reset.";
+          statusEl.className = "ok";
+        } catch (e) {
+          statusEl.textContent = e.message;
+          statusEl.className = "bad";
+        }
+      });
+
+      document.getElementById("runBtn").addEventListener("click", async () => {
+        try {
+          if (!state.ticket) throw new Error("Reset environment first.");
+          statusEl.textContent = "Running agent...";
+          statusEl.className = "muted";
+          for (let i = 0; i < MAX_STEPS; i++) {
+            if (state.resolved) break;
+            const action = chooseAction(state);
+            await postJson("/step", { action: { type: "call_tool", tool_name: action.tool_name, arguments: action.arguments } });
+            const breakdown = rewardForAction(state, action.tool_name, action.arguments);
+            state = applyAction(state, action.tool_name, action.arguments);
+            totalScore += breakdown.total;
+            logs.push({ step: logs.length + 1, action, reward: breakdown.total, breakdown, state: { ...state } });
+            render();
+          }
+          statusEl.textContent = "Agent loop complete.";
+          statusEl.className = "ok";
+        } catch (e) {
+          statusEl.textContent = e.message;
+          statusEl.className = "bad";
+        }
+      });
+
+      render();
+    </script>
+  </body>
+</html>
