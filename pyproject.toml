@@ -1,21 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "openenv-support-agent"
 version = "0.1.0"
-description = "Customer support OpenEnv environment"
+description = "Support Agent Environment for OpenEnv"
 authors = [
   { name = "Jatin Chaudhary" }
 ]
 
-requires-python = ">=3.10"   # ✅ ADD THIS LINE
+requires-python = ">=3.9"
 
 dependencies = [
-  "fastapi",
-  "uvicorn",
-  "pydantic",
-  "openenv-core>=0.2.0"
+    "openenv-core[core]==0.2.3",
+    "numpy<2",
+    "fastapi>=0.115.0",
+    "pydantic>=2.0.0",
+    "uvicorn>=0.24.0",
+    "requests>=2.31.0",
+    "openai>=1.0.0",
+    "huggingface-hub>=0.30.0"
 ]
 [project.scripts]
 server = "server.app:main"
 
 [tool.openenv]
 entrypoint = "server.app:main"
+
+[tool.setuptools.packages.find]
+include = ["env*", "server*"]
+exclude = ["echo_env_clone*", "__pycache__*"]

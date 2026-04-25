@@ -3,46 +3,18 @@ import os
 
 sys.path.append(os.getcwd())
 
-from fastapi import FastAPI
+from openenv.core.env_server.http_server import create_app
+from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservation
+
 from env.support_env import SupportEnv
-from env.models import Action
 import uvicorn
 
-app = FastAPI()
-
-env = SupportEnv()
-
-
-@app.get("/")
-def root():
-    return {"message": "API running"}
-
-
-@app.post("/reset")
-def reset(task: str = "easy"):
-    state = env.reset(task)
-    return state.dict()
-
-
-@app.post("/step")
-def step(action: str):
-    act = Action(action_str=action)
-    state, reward, done, _ = env.step(act)
-    return {
-        "state": state.dict(),
-        "reward": reward,
-        "done": done
-    }
-
-
-@app.get("/state")
-def get_state():
-    return env.state.dict()
-
+app = create_app(
+    SupportEnv, CallToolAction, CallToolObservation, env_name="support_env"
+)
 
 def main():
     uvicorn.run(app, host="0.0.0.0", port=7860)
-
 
 if __name__ == "__main__":
     main()
