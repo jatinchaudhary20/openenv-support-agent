@@ -219,10 +219,63 @@
 
     function inferUserEmotion(text) {
       const t = (text || "").toLowerCase();
-      if (["furious", "angry", "frustrated", "worst", "unacceptable", "hate", "terrible"].some((w) => t.includes(w))) return "high_negative";
-      if (["still", "issue", "problem", "not working", "no"].some((w) => t.includes(w))) return "negative";
-      if (["satisfied", "thanks", "thank you", "resolved", "works"].some((w) => t.includes(w))) return "positive";
+      if (["furious", "angry", "frustrated", "worst", "unacceptable", "hate", "terrible"].some((w) => t.includes(w))) {
+        return "high_negative";
+      }
+      if (["still", "issue", "problem", "not working", "no"].some((w) => t.includes(w))) {
+        return "negative";
+      }
+      if (["satisfied", "thanks", "thank you", "resolved", "works"].some((w) => t.includes(w))) {
+        return "positive";
+      }
       return "neutral";
+    }
+
+    function expectedLabels(ticket) {
+      const t = (ticket || "").toLowerCase();
+      const billingTerms = ["payment", "bill", "billing", "charged", "charge", "invoice", "deducted", "transaction", "upi", "card", "wallet", "subscription"];
+      const refundTerms = ["refund", "wrong product", "return", "replacement", "cancel order", "cancelled order", "order issue", "defective", "damaged", "not received"];
+      const technicalTerms = ["crash", "bug", "error", "issue logging in", "login", "otp", "app not opening", "not opening", "slow", "freeze", "stuck", "failed to load", "server down"];
+      const urgentTerms = ["urgent", "asap", "immediately", "furious", "angry", "frustrated", "worst", "unacceptable"];
+
+      let category = "technical";
+      if (refundTerms.some((w) => t.includes(w))) category = "refund";
+      else if (billingTerms.some((w) => t.includes(w))) category = "billing";
+      else if (technicalTerms.some((w) => t.includes(w))) category = "technical";
+
+      const priority = category === "technical" || urgentTerms.some((w) => t.includes(w)) ? "high" : "medium";
+      return { category, priority };
+    }
+
+    function rewardFor(tool, args, st) {
+      if (tool === "classify") {
+        const e = expectedLabels(st.ticket || "");
+        const c = (args.category || "").toLowerCase() === e.category ? 1 : -0.5;
+        const p = (args.priority || "").toLowerCase() === e.priority ? 1 : -0.5;
+        return c + p;
+      }
+      if (tool === "respond") {
+        const m = (args.message || "").toLowerCase();
+        return ["sorry", "understand", "apologize", "thanks", "assist"].some((w) => m.includes(w)) ? 1 : 0.2;
+      }
+      if (tool === "resolve") {
+        if (st.userSatisfied !== true) return -1;
+        return st.category && st.priority && st.response ? 2 : -1;
+      }
+      return 0;
+    }
+
+    function applyAction(tool, args, st) {
+      const n = { ...st };
+      if (tool === "classify") {
+        n.category = (args.category || "").toLowerCase();
+        n.priority = (args.priority || "").toLowerCase();
+      } else if (tool === "respond") {
+        n.response = args.message || "";
+      } else if (tool === "resolve" && n.category && n.priority && n.response && n.userSatisfied === true) {
+        n.resolved = true;
+      }
+      return n;
     }
 
     function trainedResponse(st) {
@@ -237,33 +290,33 @@
         billing: {
           intro: "I checked the payment ledger and transaction timeline for your account.",
           fixes: [
-            "Please retry once after refreshing payment settings.",
-            "I have initiated a billing verification ticket.",
-            "I am applying an alternate billing route."
+            "Please retry once after refreshing payment settings; if amount is still deducted, we will reverse it.",
+            "I have initiated a billing verification ticket and marked your transaction for priority reconciliation.",
+            "I am applying an alternate billing route and validating duplicate charge protection."
           ],
         },
         refund: {
           intro: "I reviewed your order and refund eligibility details.",
           fixes: [
-            "I have started the refund workflow.",
-            "I am validating return and replacement paths.",
-            "I have reopened the refund check with manual verification."
+            "I have started the refund workflow and flagged it as expedited.",
+            "I am validating return and replacement paths so you get the fastest resolution.",
+            "I have reopened the refund check with manual verification to avoid further delay."
           ],
         },
         technical: {
-          intro: "I reviewed crash signals and app diagnostics.",
+          intro: "I reviewed crash signals and app diagnostics linked to your issue.",
           fixes: [
-            "Please clear cache and retry after reinstall.",
-            "I am escalating this to technical support.",
-            "I have opened a backend stability check."
+            "Please clear cache and retry after reinstall; I am also attaching logs for engineering review.",
+            "I am escalating this to technical support with high priority and adding your reproduction steps.",
+            "I have opened a backend stability check and asked engineering for a guided workaround."
           ],
         },
       };
 
       const styleByEmotion = {
-        high_negative: "I completely understand this is extremely frustrating and apologize for the terrible experience.",
-        negative: "I am sorry for the ongoing trouble, I will make sure we get a fix.",
-        neutral: "I have reviewed your details carefully and will assist further.",
+        high_negative: "I understand this is very frustrating and I take full ownership of getting this fixed quickly.",
+        negative: "I understand this is still unresolved and I am continuing with a stronger fix path.",
+        neutral: "Thanks for the update. I am progressing the next resolution step now.",
         positive: "Thanks for your patience. I am finalizing this carefully.",
       };
 
@@ -272,31 +325,28 @@
       const fixLine = active.fixes[Math.min(turn, active.fixes.length - 1)];
 
       if (turn === 0) {
-        return `${empathyLead} ${active.intro} ${fixLine}`;
+        return `${empathyLead} ${active.intro} ${fixLine} Are you satisfied with this resolution?`;
       }
-      return `${empathyLead} Based on your latest feedback, let's try this: ${fixLine}`;
+      return `${empathyLead} Based on your latest feedback, I am refining this further. ${fixLine} Please check now and tell me if you are satisfied.`;
     }
 
     function chooseTrainedAction(st) {
-      if (st.escalated) return { tool: "respond", args: { message: "We have raised your issue to a human agent." } };
-      
-      if (!st.category) {
-        let catHint = "technical";
-        let prioHint = "high";
-        if ((st.ticket || "").toLowerCase().includes("refund")) catHint = "refund";
-        else if ((st.ticket || "").toLowerCase().includes("payment")) catHint = "billing";
-        return { tool: "classify", args: { category: catHint, priority: prioHint } };
+      if (st.escalated) {
+        return { tool: "respond", args: { message: "We have raised your issue and a support person will contact you further." } };
       }
-      
+      if (!st.category) {
+        const e = expectedLabels(st.ticket || "");
+        return { tool: "classify", args: e };
+      }
       if (!st.response || st.userSatisfied === false) {
         if ((st.negativeStreak || 0) >= ESCALATION_NEGATIVE_STREAK && !st.escalated) {
-          return { tool: "respond", args: { message: "This issue has been escalated to advanced support." } };
+          return { tool: "respond", args: { message: "We have raised your issue and a support person will contact you further." } };
         }
         return { tool: "respond", args: { message: trainedResponse(st) } };
       }
-      
-      if (st.userSatisfied === true) return { tool: "resolve", args: {} };
-      
+      if (st.userSatisfied === true) {
+        return { tool: "resolve", args: {} };
+      }
       return { tool: "respond", args: { message: trainedResponse(st) } };
     }
 
@@ -305,7 +355,7 @@
         { tool: "classify", args: { category: "billing", priority: "medium" } },
         { tool: "classify", args: { category: "refund", priority: "medium" } },
         { tool: "classify", args: { category: "technical", priority: "high" } },
-        { tool: "respond", args: { message: "Sorry for the inconvenience, let me check." } },
+        { tool: "respond", args: { message: "Sorry for the trouble, we are checking this now." } },
         { tool: "resolve", args: {} },
       ];
       return all[Math.floor(Math.random() * all.length)];
@@ -344,7 +394,9 @@
     }
 
     function renderRewardChart() {
-      const w = 320, h = 180, m = 20;
+      const w = 320;
+      const h = 180;
+      const m = 20;
       const vals = steps.map((s) => s.reward);
       rewardChart.innerHTML = `<rect x="0" y="0" width="${w}" height="${h}" fill="#0e1530" />`;
       if (!vals.length) return;
@@ -363,7 +415,9 @@
     }
 
     function renderCompareChart() {
-      const w = 320, h = 180, m = 20;
+      const w = 320;
+      const h = 180;
+      const m = 20;
       const values = [compareStats.trained, compareStats.random];
       const labels = ["Trained", "Random"];
       const maxVal = Math.max(1, ...values);
@@ -382,20 +436,11 @@
     }
 
     async function resetEnv() {
-      const task = "medium"; // Will now trigger dynamic backend generator for medium text
-      const stepResponse = await postJson("/reset", { task });
-      
-      let backendTicket = null;
-      if (stepResponse && stepResponse.observation && stepResponse.observation.metadata) {
-        if (stepResponse.observation.metadata.ticket) {
-            backendTicket = stepResponse.observation.metadata.ticket.ticket;
-        }
-      }
-
-      const ticketText = backendTicket || ticketInput.value.trim() || "Received wrong product and need refund urgently";
-      
+      const task = "medium";
+      await postJson("/reset", { task });
+      const ticket = ticketInput.value.trim() || "Received wrong product and need refund urgently";
       state = {
-        ticket: ticketText,
+        ticket,
         category: null,
         priority: null,
         response: null,
@@ -405,14 +450,13 @@
         negativeStreak: 0,
         escalated: false,
       };
-      
       steps = [];
       totalReward = 0;
       awaitingFeedback = false;
       logBox.textContent = "";
       chatBox.innerHTML = "";
-      appendChat("user", ticketText);
-      appendLog(`RESET with backend ticket -> task=${task}`);
+      appendChat("user", ticket);
+      appendLog(`RESET with task=${task}`);
       render();
     }
 
@@ -425,29 +469,24 @@
           arguments: choice.args,
         },
       };
-      
       const stepResponse = await postJson("/step", payload);
       const backendPayload = extractToolPayload(stepResponse);
-
-      // Trusting pure backend values for rewards and updated states
-      let reward = 0;
-      if (stepResponse && stepResponse.observation) {
-        reward = stepResponse.observation.reward || 0;
+      const reward = typeof backendPayload.step_reward === "number"
+        ? backendPayload.step_reward
+        : rewardFor(choice.tool, choice.args, state);
+      const nextState = applyAction(choice.tool, choice.args, state);
+      if (
+        backendPayload.ticket_state &&
+        typeof backendPayload.ticket_state === "object" &&
+        (backendPayload.ticket_state.ticket || "") === (state.ticket || "")
+      ) {
+        state = { ...nextState, ...backendPayload.ticket_state, ticket: state.ticket };
+      } else {
+        state = nextState;
       }
-      
-      let newTicketState = backendPayload.ticket_state;
-      if (!newTicketState && stepResponse && stepResponse.observation && stepResponse.observation.metadata) {
-        newTicketState = stepResponse.observation.metadata.ticket_state;
-      }
-
-      if (newTicketState && typeof newTicketState === "object") {
-        state = { ...state, ...newTicketState, ticket: state.ticket };
-      }
-
       totalReward += reward;
       steps.push({ ...choice, reward });
       appendLog(`[${policyType}] ${choice.tool} ${JSON.stringify(choice.args)} -> reward=${reward.toFixed(2)}`);
-      
       if (choice.tool === "respond") {
         appendChat("agent", choice.args.message);
         awaitingFeedback = true;
@@ -457,11 +496,9 @@
           appendLog("Escalation threshold reached -> handoff to human support.");
         }
       }
-      
       if (choice.tool === "resolve" && state.resolved) {
         appendChat("agent", "Great, your issue is now fully resolved.");
       }
-      
       render();
     }
 
@@ -477,28 +514,36 @@
     }
 
     async function comparePolicies() {
-      // Run full trained baseline via backend
+      const snapshot = { ...state };
+      const userSatisfiedSnapshot = state.userSatisfied;
+
+      let trainedReward = 0;
+      let randomReward = 0;
+
       await resetEnv();
       for (let i = 0; i < 6; i += 1) {
         if (state.resolved) break;
-        await runOneStep("trained");
-        if (state.response) {
-            state.userSatisfied = false;
-            state.userFeedbackTurns = (state.userFeedbackTurns || 0) + 1;
+        const c = chooseTrainedAction(state);
+        const r = rewardFor(c.tool, c.args, state);
+        trainedReward += r;
+        state = applyAction(c.tool, c.args, state);
+        if (c.tool === "respond") {
+          state.userSatisfied = false;
+          state.userFeedbackTurns = (state.userFeedbackTurns || 0) + 1;
         }
       }
-      const trainedRwd = totalReward;
-
-      // Run full random baseline via backend
       await resetEnv();
+      state.userSatisfied = userSatisfiedSnapshot;
       for (let i = 0; i < 6; i += 1) {
         if (state.resolved) break;
-        await runOneStep("random");
+        const c = chooseRandomAction(state);
+        const r = rewardFor(c.tool, c.args, state);
+        randomReward += r;
+        state = applyAction(c.tool, c.args, state);
       }
-      const randomRwd = totalReward;
-
-      appendLog(`COMPARE DONE -> trained=${trainedRwd.toFixed(2)}, random=${randomRwd.toFixed(2)}`);
-      compareStats = { trained: trainedRwd, random: randomRwd };
+      appendLog(`COMPARE -> trained=${trainedReward.toFixed(2)}, random=${randomReward.toFixed(2)}`);
+      compareStats = { trained: trainedReward, random: randomReward };
+      state = snapshot;
       render();
     }
 
@@ -512,20 +557,13 @@
     document.getElementById("trainedBtn").addEventListener("click", () => runPolicy("trained"));
     document.getElementById("randomBtn").addEventListener("click", () => runPolicy("random"));
     document.getElementById("compareBtn").addEventListener("click", comparePolicies);
-    
     document.getElementById("chatSendBtn").addEventListener("click", async () => {
       const text = chatInput.value.trim();
       if (!text || !awaitingFeedback) return;
-      
       chatInput.value = "";
       appendChat("user", text);
       const emotion = inferUserEmotion(text);
       appendLog(`Detected user emotion: ${emotion}`);
-      
-      // Update UI state for mock policy
-      state.emotion = emotion;
-      
-      // Tell backend about feedback 
       const feedbackPayload = {
         action: {
           type: "call_tool",
@@ -533,11 +571,15 @@
           arguments: { message: text },
         },
       };
-      
-      try {
-        await postJson("/step", feedbackPayload); // Send blind action to let environment register if configured
-      } catch(e) {}
-      
+      const feedbackResponse = await postJson("/step", feedbackPayload);
+      const backendFeedback = extractToolPayload(feedbackResponse);
+      if (
+        backendFeedback.ticket_state &&
+        typeof backendFeedback.ticket_state === "object" &&
+        (backendFeedback.ticket_state.ticket || "") === (state.ticket || "")
+      ) {
+        state = { ...state, ...backendFeedback.ticket_state, ticket: state.ticket };
+      }
       const sat = parseSatisfaction(text);
       if (sat === true) {
         state.userSatisfied = true;
@@ -553,11 +595,11 @@
         appendLog("User not satisfied -> continue chat with new response.");
         await runOneStep("trained");
       }
+      render();
     });
 
     ticketInput.value = "Received wrong product and need refund urgently";
-    // Defer reset to let dashboard initialize visually before backend pings
-    // resetEnv().catch((e) => appendLog(`Init error: ${e.message}`)); 
+    resetEnv().catch((e) => appendLog(`Init error: ${e.message}`));
   </script>
 </body>
 </html>
