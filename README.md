@@ -1,3 +1,13 @@
+---
+title: OpenEnv Support Agent
+emoji: "🤖"
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_file: server/app.py
+pinned: false
+---
+
 # 🚀 OpenEnv Support Agent 
 
 [![OpenEnv Compatible](https://img.shields.io/badge/OpenEnv-0.2.3-blue)](https://github.com/meta-pytorch/OpenEnv)
