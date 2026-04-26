@@ -5,5 +5,5 @@ __pycache__/
 evaluation_logs.jsonl
 echo_env_clone/
 openenv-support-agent/
-artifacts/
+# Keep training plots + metrics in repo for judges (see README artifacts/)
 outputs/
