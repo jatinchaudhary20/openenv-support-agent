@@ -193,6 +193,7 @@
     let steps = [];
     let awaitingFeedback = false;
     let compareStats = { trained: 0, random: 0 };
+    const ESCALATION_NEGATIVE_STREAK = 3;
 
     function appendLog(line) {
       logBox.textContent += line + "\n";
@@ -214,6 +215,20 @@
       if (neg.some((w) => t.includes(w))) return false;
       if (pos.some((w) => t.includes(w))) return true;
       return null;
+    }
+
+    function inferUserEmotion(text) {
+      const t = (text || "").toLowerCase();
+      if (["furious", "angry", "frustrated", "worst", "unacceptable", "hate", "terrible"].some((w) => t.includes(w))) {
+        return "high_negative";
+      }
+      if (["still", "issue", "problem", "not working", "no"].some((w) => t.includes(w))) {
+        return "negative";
+      }
+      if (["satisfied", "thanks", "thank you", "resolved", "works"].some((w) => t.includes(w))) {
+        return "positive";
+      }
+      return "neutral";
     }
 
     function expectedLabels(ticket) {
@@ -265,6 +280,9 @@
 
     function trainedResponse(st) {
       const cat = st.category || "issue";
+      if (st.escalated) {
+        return "We have raised your issue and a support person will contact you further.";
+      }
       if ((st.userFeedbackTurns || 0) === 0) {
         return `I understand your ${cat} issue and I am sorry for the inconvenience. I have applied a fix path and shared next steps. Are you satisfied with this resolution?`;
       }
@@ -277,6 +295,9 @@
         return { tool: "classify", args: e };
       }
       if (!st.response || st.userSatisfied === false) {
+        if ((st.negativeStreak || 0) >= ESCALATION_NEGATIVE_STREAK && !st.escalated) {
+          return { tool: "respond", args: { message: "We have raised your issue and a support person will contact you further." } };
+        }
         return { tool: "respond", args: { message: trainedResponse(st) } };
       }
       if (st.userSatisfied === true) {
@@ -365,7 +386,17 @@
       const task = "medium";
       await postJson("/reset", { task });
       const ticket = ticketInput.value.trim() || "Received wrong product and need refund urgently";
-      state = { ticket, category: null, priority: null, response: null, resolved: false, userSatisfied: null, userFeedbackTurns: 0 };
+      state = {
+        ticket,
+        category: null,
+        priority: null,
+        response: null,
+        resolved: false,
+        userSatisfied: null,
+        userFeedbackTurns: 0,
+        negativeStreak: 0,
+        escalated: false,
+      };
       steps = [];
       totalReward = 0;
       awaitingFeedback = false;
@@ -394,6 +425,11 @@
       if (choice.tool === "respond") {
         appendChat("agent", choice.args.message);
         awaitingFeedback = true;
+        if ((choice.args.message || "").toLowerCase().includes("we have raised your issue")) {
+          state.escalated = true;
+          awaitingFeedback = false;
+          appendLog("Escalation threshold reached -> handoff to human support.");
+        }
       }
       if (choice.tool === "resolve" && state.resolved) {
         appendChat("agent", "Great, your issue is now fully resolved.");
@@ -461,15 +497,19 @@
       if (!text || !awaitingFeedback) return;
       chatInput.value = "";
       appendChat("user", text);
+      const emotion = inferUserEmotion(text);
+      appendLog(`Detected user emotion: ${emotion}`);
       const sat = parseSatisfaction(text);
       if (sat === true) {
         state.userSatisfied = true;
+        state.negativeStreak = 0;
         awaitingFeedback = false;
         appendLog("User marked satisfied -> attempting resolve.");
         await runOneStep("trained");
       } else {
         state.userSatisfied = false;
         state.userFeedbackTurns = (state.userFeedbackTurns || 0) + 1;
+        state.negativeStreak = (state.negativeStreak || 0) + 1;
         awaitingFeedback = false;
         appendLog("User not satisfied -> continue chat with new response.");
         await runOneStep("trained");
