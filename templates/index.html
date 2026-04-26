@@ -3,54 +3,116 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OpenEnv Support Agent Demo</title>
+    <title>OpenEnv Support Agent Dashboard</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
-      h1 { margin-top: 0; }
-      .grid { display: grid; grid-template-columns: 360px 1fr; gap: 24px; }
-      textarea { width: 100%; min-height: 120px; }
-      button { margin-top: 8px; margin-right: 8px; padding: 8px 12px; }
-      .panel { border: 1px solid #ddd; border-radius: 8px; padding: 12px; }
-      .muted { color: #666; font-size: 13px; }
-      pre { background: #f7f7f7; padding: 8px; border-radius: 6px; overflow: auto; }
-      .ok { color: #0a7d24; }
-      .bad { color: #b00020; }
+      :root {
+        --bg: #0b1020;
+        --card: #141a2e;
+        --text: #e9eefc;
+        --muted: #9ca8c7;
+        --accent: #6ea8fe;
+        --ok: #26c281;
+        --bad: #ff6b6b;
+        --warn: #ffd166;
+        --border: #28314f;
+      }
+      body { font-family: Inter, Arial, sans-serif; margin: 0; background: radial-gradient(circle at top, #142040, #0b1020 50%); color: var(--text); }
+      .container { max-width: 1200px; margin: 20px auto; padding: 0 16px; }
+      .title { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 14px; }
+      .muted { color: var(--muted); font-size: 13px; }
+      .grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; }
+      .panel { background: rgba(20,26,46,.88); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+      .kpis { display:grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin: 10px 0 14px; }
+      .kpi { background: var(--card); border:1px solid var(--border); border-radius: 10px; padding: 10px; }
+      .kpi .v { font-size: 22px; font-weight: 700; margin-top: 4px; }
+      textarea { width: 100%; min-height: 120px; resize: vertical; border-radius: 8px; background: #0f1529; color: var(--text); border:1px solid var(--border); padding: 8px; }
+      .row { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+      button { background:#1b2442; color:var(--text); border:1px solid var(--border); border-radius: 8px; padding: 8px 11px; cursor:pointer; }
+      button:hover { border-color: var(--accent); }
+      .pill { display:inline-block; padding:2px 8px; border-radius: 999px; border:1px solid var(--border); font-size:12px; color:var(--muted);}
+      .ok { color: var(--ok); }
+      .bad { color: var(--bad); }
+      .warn { color: var(--warn); }
+      .log { border-top:1px solid var(--border); padding-top:8px; margin-top:8px; }
+      pre { background:#0f1529; border:1px solid var(--border); color:#c9d6ff; padding:8px; border-radius:8px; overflow:auto; }
+      .chart { margin-top: 10px; background:#0f1529; border:1px solid var(--border); border-radius: 10px; padding:8px; }
+      .compare { display:grid; grid-template-columns: repeat(2,1fr); gap:8px; }
+      @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2,1fr);} .compare {grid-template-columns:1fr;} }
     </style>
   </head>
   <body>
-    <h1>OpenEnv Support Agent Demo</h1>
-    <p class="muted">Single-space frontend + API demo. Uses /reset and /step.</p>
-    <div class="grid">
-      <div class="panel">
-        <label for="ticket"><strong>Ticket Input</strong></label>
-        <textarea id="ticket">Payment failed but money deducted</textarea>
+    <div class="container">
+      <div class="title">
         <div>
-          <button id="resetBtn">Reset Environment</button>
-          <button id="runBtn">Run Agent</button>
+          <h2 style="margin:0;">OpenEnv Support Agent Dashboard</h2>
+          <div class="muted">Hackathon demo mode: live API loop, KPI cards, trajectory logs, and policy comparison.</div>
         </div>
-        <p id="status" class="muted">Idle</p>
-        <hr />
-        <p><strong>Total Score:</strong> <span id="score">0</span></p>
-        <p><strong>Resolved:</strong> <span id="resolved">no</span></p>
-        <p><strong>Steps:</strong> <span id="steps">0</span></p>
+        <span class="pill">/reset + /step + /healthz</span>
       </div>
-      <div class="panel">
-        <strong>Step Logs</strong>
-        <div id="logs"></div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="muted">Total Reward</div><div id="kScore" class="v">0.00</div></div>
+        <div class="kpi"><div class="muted">Resolved</div><div id="kResolved" class="v">no</div></div>
+        <div class="kpi"><div class="muted">Steps</div><div id="kSteps" class="v">0</div></div>
+        <div class="kpi"><div class="muted">Empathy Avg</div><div id="kEmp" class="v">0.00</div></div>
+      </div>
+
+      <div class="grid">
+        <div class="panel">
+          <label for="ticket"><strong>Ticket Input</strong></label>
+          <textarea id="ticket">Payment failed but money deducted</textarea>
+          <div class="row">
+            <button class="preset" data-ticket="Payment failed but money deducted">Billing preset</button>
+            <button class="preset" data-ticket="Received wrong product, want refund">Refund preset</button>
+            <button class="preset" data-ticket="App crashes when I open it">Technical preset</button>
+            <button class="preset" data-ticket="I am frustrated and angry, refund now!">Angry preset</button>
+          </div>
+          <div class="row">
+            <button id="resetBtn">Reset</button>
+            <button id="runBtn">Run Trained Policy</button>
+            <button id="runRandomBtn">Run Random Policy</button>
+            <button id="compareBtn">Compare Random vs Trained</button>
+          </div>
+          <p id="status" class="muted">Idle</p>
+          <div class="chart">
+            <div class="muted">Reward per Step</div>
+            <svg id="rewardChart" viewBox="0 0 420 120" width="100%" height="120"></svg>
+          </div>
+          <div class="chart">
+            <div class="muted">Reward Breakdown (latest step)</div>
+            <svg id="breakdownChart" viewBox="0 0 420 120" width="100%" height="120"></svg>
+          </div>
+        </div>
+
+        <div class="panel">
+          <strong>Step Timeline</strong>
+          <div id="logs"></div>
+          <div class="chart">
+            <div class="muted">Policy Comparison</div>
+            <div class="compare">
+              <pre id="cmpRandom">Random: not run</pre>
+              <pre id="cmpTrained">Trained: not run</pre>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <script>
       const MAX_STEPS = 5;
+      const EMPATHY_TERMS = ["sorry", "understand", "apologize", "thanks", "assist"];
       let state = {};
       let totalScore = 0;
       let logs = [];
 
       const statusEl = document.getElementById("status");
-      const scoreEl = document.getElementById("score");
-      const resolvedEl = document.getElementById("resolved");
-      const stepsEl = document.getElementById("steps");
       const logsEl = document.getElementById("logs");
+      const kScore = document.getElementById("kScore");
+      const kResolved = document.getElementById("kResolved");
+      const kSteps = document.getElementById("kSteps");
+      const kEmp = document.getElementById("kEmp");
+      const rewardChart = document.getElementById("rewardChart");
+      const breakdownChart = document.getElementById("breakdownChart");
 
       function expectedLabels(ticket) {
         const t = (ticket || "").toLowerCase();
@@ -58,114 +120,180 @@
         if (t.includes("refund") || t.includes("wrong")) return ["refund", "medium"];
         return ["technical", "high"];
       }
-
+      function sentiment(ticket) {
+        const t = (ticket || "").toLowerCase();
+        return ["angry","frustrated","worst","terrible"].some(x => t.includes(x)) ? "angry" : "neutral";
+      }
       function rewardForAction(st, tool, args) {
-        let c = 0, p = 0, e = 0, pen = 0;
+        let c=0,p=0,e=0,pen=0;
         if (tool === "classify") {
-          const [ec, ep] = expectedLabels(st.ticket || "");
+          const [ec,ep] = expectedLabels(st.ticket || "");
           c = args.category === ec ? 1 : -0.5;
           p = args.priority === ep ? 1 : -0.5;
         } else if (tool === "respond") {
           const msg = (args.message || "").toLowerCase();
-          const empathyTerms = ["sorry","understand","apologize","thanks","assist"];
-          e = empathyTerms.some(x => msg.includes(x)) ? 1 : 0.2;
+          e = EMPATHY_TERMS.some(x => msg.includes(x)) ? 1 : 0.2;
         } else if (tool === "resolve") {
           pen = st.category && st.priority && st.response ? 2 : -1;
         }
-        return { classification: c, priority: p, empathy: e, penalty: pen, total: c + p + e + pen };
+        return { classification:c, priority:p, empathy:e, penalty:pen, total:c+p+e+pen };
       }
-
       function applyAction(st, tool, args) {
-        const next = { ...st };
-        if (tool === "classify") {
-          next.category = args.category;
-          next.priority = args.priority;
-        } else if (tool === "respond") {
-          next.response = args.message;
-        } else if (tool === "resolve") {
-          if (next.category && next.priority && next.response) next.resolved = true;
-        }
-        return next;
+        const n = { ...st };
+        if (tool === "classify") { n.category = args.category; n.priority = args.priority; }
+        else if (tool === "respond") { n.response = args.message; }
+        else if (tool === "resolve" && n.category && n.priority && n.response) { n.resolved = true; }
+        return n;
       }
-
-      function chooseAction(st) {
-        const ticket = (st.ticket || "").toLowerCase();
+      function chooseTrainedAction(st) {
+        const t = (st.ticket || "").toLowerCase();
         if (!st.category) {
-          if (ticket.includes("payment")) return { tool_name: "classify", arguments: { category: "billing", priority: "medium" } };
-          if (ticket.includes("refund") || ticket.includes("wrong")) return { tool_name: "classify", arguments: { category: "refund", priority: "medium" } };
-          return { tool_name: "classify", arguments: { category: "technical", priority: "high" } };
+          if (t.includes("payment")) return { tool_name:"classify", arguments:{category:"billing", priority:"medium"} };
+          if (t.includes("refund") || t.includes("wrong")) return { tool_name:"classify", arguments:{category:"refund", priority:"medium"} };
+          return { tool_name:"classify", arguments:{category:"technical", priority:"high"} };
         }
-        if (!st.response) return { tool_name: "respond", arguments: { message: "I understand your issue and I am sorry for the inconvenience. We are fixing this now." } };
-        return { tool_name: "resolve", arguments: {} };
+        if (!st.response) return { tool_name:"respond", arguments:{message:"I understand your issue and I am sorry for the inconvenience. We are fixing this now."} };
+        return { tool_name:"resolve", arguments:{} };
       }
-
-      function render() {
-        scoreEl.textContent = totalScore.toFixed(2);
-        resolvedEl.textContent = state.resolved ? "yes" : "no";
-        stepsEl.textContent = String(logs.length);
-        logsEl.innerHTML = logs.map((l) => `
-          <div style="border-top:1px solid #eee; padding-top:8px; margin-top:8px;">
-            <div><strong>Step ${l.step}</strong></div>
-            <div>Action: <code>${JSON.stringify(l.action)}</code></div>
-            <div>Reward: <strong>${l.reward.toFixed(2)}</strong></div>
-            <div>Breakdown: <code>${JSON.stringify(l.breakdown)}</code></div>
-            <pre>${JSON.stringify(l.state, null, 2)}</pre>
-          </div>
-        `).join("");
+      function chooseRandomAction() {
+        const actions = [
+          { tool_name:"classify", arguments:{category:"billing", priority:"medium"} },
+          { tool_name:"classify", arguments:{category:"refund", priority:"medium"} },
+          { tool_name:"classify", arguments:{category:"technical", priority:"high"} },
+          { tool_name:"respond", arguments:{message:"Issue noted. Working on it."} },
+          { tool_name:"respond", arguments:{message:"I understand and I am sorry. We are resolving this now."} },
+          { tool_name:"resolve", arguments:{} },
+        ];
+        return actions[Math.floor(Math.random() * actions.length)];
       }
-
       async function postJson(path, body) {
-        const r = await fetch(path, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body)
-        });
-        if (!r.ok) {
-          const txt = await r.text();
-          throw new Error(`${path} failed: ${r.status} ${txt}`);
-        }
+        const r = await fetch(path, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) });
+        if (!r.ok) throw new Error(`${path} failed: ${r.status} ${await r.text()}`);
         return r.json();
       }
 
-      document.getElementById("resetBtn").addEventListener("click", async () => {
-        try {
-          const ticket = document.getElementById("ticket").value.trim();
-          if (!ticket) throw new Error("Please enter a ticket.");
-          statusEl.textContent = "Resetting...";
-          await postJson("/reset", { ticket });
-          state = { ticket, category: null, priority: null, response: null, resolved: false };
-          totalScore = 0;
-          logs = [];
-          render();
-          statusEl.textContent = "Environment reset.";
-          statusEl.className = "ok";
-        } catch (e) {
-          statusEl.textContent = e.message;
-          statusEl.className = "bad";
-        }
-      });
+      function drawRewardChart() {
+        const vals = logs.map(l => l.reward);
+        if (!vals.length) { rewardChart.innerHTML = ""; return; }
+        const min = Math.min(...vals, 0), max = Math.max(...vals, 1), pad = 8;
+        const w = 420, h = 120, span = (max - min) || 1;
+        let points = vals.map((v,i) => {
+          const x = pad + i * ((w - 2*pad) / Math.max(1, vals.length - 1));
+          const y = h - pad - ((v - min) / span) * (h - 2*pad);
+          return `${x},${y}`;
+        }).join(" ");
+        rewardChart.innerHTML = `<polyline fill="none" stroke="#6ea8fe" stroke-width="2" points="${points}" />`;
+      }
 
-      document.getElementById("runBtn").addEventListener("click", async () => {
-        try {
-          if (!state.ticket) throw new Error("Reset environment first.");
-          statusEl.textContent = "Running agent...";
-          statusEl.className = "muted";
-          for (let i = 0; i < MAX_STEPS; i++) {
-            if (state.resolved) break;
-            const action = chooseAction(state);
-            await postJson("/step", { action: { type: "call_tool", tool_name: action.tool_name, arguments: action.arguments } });
-            const breakdown = rewardForAction(state, action.tool_name, action.arguments);
-            state = applyAction(state, action.tool_name, action.arguments);
-            totalScore += breakdown.total;
-            logs.push({ step: logs.length + 1, action, reward: breakdown.total, breakdown, state: { ...state } });
-            render();
-          }
-          statusEl.textContent = "Agent loop complete.";
-          statusEl.className = "ok";
-        } catch (e) {
-          statusEl.textContent = e.message;
-          statusEl.className = "bad";
+      function drawBreakdownChart() {
+        if (!logs.length) { breakdownChart.innerHTML = ""; return; }
+        const b = logs[logs.length - 1].breakdown;
+        const items = [
+          ["class", b.classification],
+          ["priority", b.priority],
+          ["empathy", b.empathy],
+          ["penalty", b.penalty],
+        ];
+        const w = 420, h = 120, bw = 70, gap = 26, baseY = 60, scale = 24;
+        let svg = "";
+        items.forEach((it, i) => {
+          const x = 20 + i * (bw + gap);
+          const v = it[1];
+          const bh = Math.abs(v) * scale;
+          const y = v >= 0 ? baseY - bh : baseY;
+          const color = v >= 0 ? "#26c281" : "#ff6b6b";
+          svg += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" fill="${color}" opacity="0.9"></rect>`;
+          svg += `<text x="${x + 8}" y="${h - 8}" fill="#9ca8c7" font-size="11">${it[0]}</text>`;
+        });
+        svg += `<line x1="10" x2="410" y1="${baseY}" y2="${baseY}" stroke="#314063"/>`;
+        breakdownChart.innerHTML = svg;
+      }
+
+      function render() {
+        const empathyVals = logs.map(l => l.breakdown.empathy);
+        const empathyAvg = empathyVals.length ? empathyVals.reduce((a,b)=>a+b,0)/empathyVals.length : 0;
+        kScore.textContent = totalScore.toFixed(2);
+        kResolved.textContent = state.resolved ? "yes" : "no";
+        kSteps.textContent = String(logs.length);
+        kEmp.textContent = empathyAvg.toFixed(2);
+        logsEl.innerHTML = logs.map((l) => `
+          <div class="log">
+            <div><strong>Step ${l.step}</strong> <span class="pill">${l.mode}</span></div>
+            <div class="muted">Action: <code>${JSON.stringify(l.action)}</code></div>
+            <div>Reward: <strong>${l.reward.toFixed(2)}</strong> | Breakdown: <code>${JSON.stringify(l.breakdown)}</code></div>
+            <div class="muted">Sentiment: ${sentiment(l.state.ticket)} | Resolved: ${l.state.resolved ? "yes":"no"}</div>
+          </div>
+        `).join("");
+        drawRewardChart();
+        drawBreakdownChart();
+      }
+
+      async function resetEnv() {
+        const ticket = document.getElementById("ticket").value.trim();
+        if (!ticket) throw new Error("Please enter a ticket.");
+        await postJson("/reset", { ticket });
+        state = { ticket, category:null, priority:null, response:null, resolved:false };
+        totalScore = 0;
+        logs = [];
+        render();
+      }
+
+      async function runPolicy(mode) {
+        if (!state.ticket) throw new Error("Reset environment first.");
+        for (let i = 0; i < MAX_STEPS; i++) {
+          if (state.resolved) break;
+          const action = mode === "random" ? chooseRandomAction() : chooseTrainedAction(state);
+          await postJson("/step", { action: { type:"call_tool", tool_name: action.tool_name, arguments: action.arguments } });
+          const breakdown = rewardForAction(state, action.tool_name, action.arguments);
+          state = applyAction(state, action.tool_name, action.arguments);
+          totalScore += breakdown.total;
+          logs.push({ step: logs.length + 1, mode, action, reward: breakdown.total, breakdown, state: { ...state } });
+          render();
         }
+      }
+
+      async function comparePolicies() {
+        const ticket = document.getElementById("ticket").value.trim();
+        const run = async (mode) => {
+          await postJson("/reset", { ticket });
+          let s = { ticket, category:null, priority:null, response:null, resolved:false };
+          let total = 0;
+          let steps = 0;
+          for (let i = 0; i < MAX_STEPS; i++) {
+            steps++;
+            const a = mode === "random" ? chooseRandomAction() : chooseTrainedAction(s);
+            await postJson("/step", { action: { type:"call_tool", tool_name:a.tool_name, arguments:a.arguments } });
+            const b = rewardForAction(s, a.tool_name, a.arguments);
+            total += b.total;
+            s = applyAction(s, a.tool_name, a.arguments);
+            if (s.resolved) break;
+          }
+          return { mode, total, resolved: s.resolved, steps };
+        };
+        const random = await run("random");
+        const trained = await run("trained");
+        document.getElementById("cmpRandom").textContent = JSON.stringify(random, null, 2);
+        document.getElementById("cmpTrained").textContent = JSON.stringify(trained, null, 2);
+      }
+
+      document.querySelectorAll(".preset").forEach(btn => {
+        btn.addEventListener("click", () => { document.getElementById("ticket").value = btn.dataset.ticket; });
+      });
+      document.getElementById("resetBtn").addEventListener("click", async () => {
+        try { statusEl.className = "muted"; statusEl.textContent = "Resetting..."; await resetEnv(); statusEl.className = "ok"; statusEl.textContent = "Environment reset."; }
+        catch (e) { statusEl.className = "bad"; statusEl.textContent = e.message; }
+      });
+      document.getElementById("runBtn").addEventListener("click", async () => {
+        try { statusEl.className = "muted"; statusEl.textContent = "Running trained policy..."; await runPolicy("trained"); statusEl.className = "ok"; statusEl.textContent = "Run complete."; }
+        catch (e) { statusEl.className = "bad"; statusEl.textContent = e.message; }
+      });
+      document.getElementById("runRandomBtn").addEventListener("click", async () => {
+        try { statusEl.className = "muted"; statusEl.textContent = "Running random policy..."; await runPolicy("random"); statusEl.className = "warn"; statusEl.textContent = "Random run complete."; }
+        catch (e) { statusEl.className = "bad"; statusEl.textContent = e.message; }
+      });
+      document.getElementById("compareBtn").addEventListener("click", async () => {
+        try { statusEl.className = "muted"; statusEl.textContent = "Comparing policies..."; await comparePolicies(); statusEl.className = "ok"; statusEl.textContent = "Comparison ready."; }
+        catch (e) { statusEl.className = "bad"; statusEl.textContent = e.message; }
       });
 
       render();

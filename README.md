@@ -93,6 +93,14 @@ Generated artifacts:
 - `artifacts/baseline_vs_trained.png`
 - `artifacts/training_metrics.json`
 
+### Training Reward Curve
+![Training Reward Curve](artifacts/training_reward_curve.png)
+Caption: Episode reward over training with moving average, showing policy improvement trend.
+
+### Baseline vs Trained Comparison
+![Baseline vs Trained](artifacts/baseline_vs_trained.png)
+Caption: Side-by-side comparison of random baseline and trained policy on average reward, resolution rate, and average steps.
+
 ## Training Evidence (Latest Run)
 - **Random baseline**
   - avg reward: `-1.3617`
