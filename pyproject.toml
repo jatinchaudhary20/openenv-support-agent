@@ -20,5 +20,8 @@ dependencies = [
 [project.scripts]
 server = "server.app:main"
 
+[project.optional-dependencies]
+train = ["torch", "trl", "datasets", "transformers", "accelerate", "bitsandbytes"]
+
 [tool.openenv]
 entrypoint = "server.app:main"

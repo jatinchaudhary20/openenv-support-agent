@@ -60,6 +60,15 @@ class SupportEnv(MCPEnvironment):
             self.ticket_state.response = message
             empathy = self.llm_judge.evaluate_empathy(self.ticket_state.ticket, message)
             self.latest_reward += empathy
+            
+            # --- DYNAMIC AGGRAVATION MECHANISM ---
+            if empathy < 0.3:
+                self.ticket_state.ticket += " (FURIOUS UPDATE: Your agent was extremely unhelpful and rude! I want to speak to a manager immediately!)"
+                self.ticket_state.expected_priority = "high"
+                self.ticket_state.priority = "high"
+                self._advance_turn("customer", "Your response was unhelpful. Escalate this issue now.")
+            # -------------------------------------
+            
             self._advance_turn("assistant", message)
             self.last_reward_breakdown = {
                 "classification": 0.0,

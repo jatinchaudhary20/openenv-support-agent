@@ -22,4 +22,4 @@ observation_space:
   reward_breakdown: object
   event_log: array
 
-reward_range: [-1, 5]
+reward_range: [-5, 10]
