@@ -18,7 +18,7 @@ pinned: false
 | **Valid OpenEnv layout** | **Met** | `SupportEnv` subclasses [`MCPEnvironment`](https://github.com/meta-pytorch/OpenEnv) (`env/support_env.py`); `reset` / step-style flow via the OpenEnv server + `openenv.yaml` is parseable. |
 | **Training plots committed** (`.png` / `.jpg` in the repo) | **Met** | [Training evidence (plots)](#training-evidence-plots) in `artifacts/`. (Optional: swap in PNGs from your real Colab run for stronger “actual training” signal.) |
 | **Runnable training** (Unsloth, TRL, or similar) | **Met** | [`colab_training.ipynb`](colab_training.ipynb) (Unsloth + TRL SFT) and Colab: [open notebook](https://colab.research.google.com/drive/1FnXLF6ni6HzkoGlJWep_WSDjsC6hrX0i?usp=sharing). [`train_online.py`](train_online.py) points here. |
-| **README links to everything + inline plots** | **Met** once YouTube is set | **HF + Colab + inline plots** are linked. **Add your public YouTube URL** in the section below, then re-read this table. |
+| **README links to everything + inline plots** | **Met** (add YouTube when ready) | **HF + Colab + blog writeup** ([`BLOG.md`](BLOG.md)) + inline plots. Optional: public **YouTube** URL in [Writeup](#writeup). |
 
 ## Hugging Face Space
 
@@ -29,12 +29,13 @@ pinned: false
 
 ## Colab
 
-- **Open in Colab:** <https://colab.research.google.com/drive/1FnXLF6ni6HzkoGlJWep_WSDjsC6hrX0i?usp=sharing>  
+- **Open in Colab:** <https://colab.research.google.com/drive/1aqo2huXfhNO_6fLBkrHRxwaAcP0knCmo?usp=sharing>  
 - **Source file in repo:** [`colab_training.ipynb`](colab_training.ipynb)
 
-## YouTube demo (writeup / presentation)
+## Writeup
 
-- **Video URL:** *paste your public YouTube link here* (or Google Slides / blog if the rubric allows “writeup” to be any of these).
+- **Blog:** [`BLOG.md`](BLOG.md) (same content you can publish on Medium / dev.to / your site).
+- **Video URL:** *paste your public YouTube link here* if you add a walkthrough.
 
 ## Training evidence (plots)
 
