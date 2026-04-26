@@ -6,3 +6,4 @@ evaluation_logs.jsonl
 echo_env_clone/
 openenv-support-agent/
 artifacts/
+outputs/

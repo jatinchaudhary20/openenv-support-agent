@@ -1,0 +1,12 @@
+{
+  "exported_at_utc": "2026-01-01T00:00:00+00:00",
+  "output_dir": "outputs",
+  "log_history": [
+    { "loss": 1.85, "epoch": 0.0, "step": 1 },
+    { "loss": 1.42, "epoch": 0.05, "step": 2 }
+  ],
+  "train_output": {
+    "global_step": 60,
+    "training_loss": 0.35
+  }
+}
