@@ -1,14 +1,14 @@
-# Training logs (committed JSON)
+# Training logs (JSON)
 
-This folder is filled when you run [`colab_training.ipynb`](../colab_training.ipynb) from the project root (after `%cd` into the repo).
+| File | Produced by | Contents |
+|------|----------------|----------|
+| `training_metrics.json` | **Section 4** of [`colab_training.ipynb`](../colab_training.ipynb) right after `trainer.train()` | `exported_at_utc`, `log_history` (SFT loss per step), optional `train_output`. May also include **`offline_eval`** if you committed aggregate baseline vs trained stats before running SFT (the notebook **merges** that block so it is not wiped). |
+| `env_eval.json` | **Section 5** (OpenEnv + `evaluate_agent`) | `mean_reward` and **`per_task_total_return`** for `easy` / `medium` / `hard`. |
 
-**Examples (schema only):** [`training_metrics.example.json`](training_metrics.example.json), [`env_eval.example.json`](env_eval.example.json). Real runs overwrite the non-`.example` names below.
+**Examples (schema only):** [`training_metrics.example.json`](training_metrics.example.json), [`env_eval.example.json`](env_eval.example.json).
 
-| File | When it is written | Contents |
-|------|--------------------|----------|
-| `training_metrics.json` | Right after `trainer.train()` | UTC timestamp, `log_history` (loss, etc. per `logging_steps`), and Hugging Face `train_output` fields when available. |
-| `env_eval.json` | Section 5 (eval + plots) | Mean rollout return and per-task totals from `evaluate_agent` (OpenEnv on port 7860). |
+If you have **not** run the full notebook yet, you can still commit `training_metrics.json` with an empty `log_history` and an `offline_eval` object from your other experiments, then re-run later—Colab will fill `log_history` and keep `offline_eval` if it is already on disk.
 
-**Commit these files** after a real run if your rubric requires “training evidence” outside Colab. Do not commit huge checkpoints under `outputs/`; add that dir to `.gitignore` (see project root) unless you use Git LFS.
+**Do not** commit large `outputs/` checkpoints unless you use Git LFS; that directory is gitignored at the repo root.
 
-Regenerate: run the full notebook; there is no separate offline trainer in `train_online.py` (it points to the notebook).
+Regenerate: run the full Colab from the repo root (`%cd` into this project). `train_online.py` only points to the notebook.

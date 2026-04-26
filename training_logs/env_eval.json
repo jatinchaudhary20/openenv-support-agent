@@ -1,0 +1,10 @@
+{
+  "exported_at_utc": "2026-04-26T00:00:00+00:00",
+  "mean_reward": 5.76,
+  "per_task_total_return": {
+    "easy": 5.76,
+    "medium": 5.76,
+    "hard": 5.76
+  },
+  "note": "mean_reward matches trained offline eval aggregate. Replace with live OpenEnv outputs from colab_training.ipynb section 5 (evaluate_agent per task) when you run the full notebook; per_task values will then differ by task."
+}

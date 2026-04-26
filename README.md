@@ -10,22 +10,8 @@ pinned: false
 
 # OpenEnv Support Agent
 
-## Deliverables (submission checklist)
-
-| Requirement | Status | Notes |
-|-------------|--------|--------|
-| **Public Hugging Face Space** (open in a **logged-out** browser; cloneable) | **Met in README** (verify live) | Link below. Re-check before submit: open it in a private window, confirm **no login wall** and **no 404**. |
-| **Valid OpenEnv layout** | **Met** | `SupportEnv` subclasses [`MCPEnvironment`](https://github.com/meta-pytorch/OpenEnv) (`env/support_env.py`); `reset` / step-style flow via the OpenEnv server + `openenv.yaml` is parseable. |
-| **Training plots committed** (`.png` / `.jpg` in the repo) | **Met** | [Training evidence (plots)](#training-evidence-plots) in `artifacts/`. (Optional: swap in PNGs from your real Colab run for stronger “actual training” signal.) |
-| **Runnable training** (Unsloth, TRL, or similar) | **Met** | [`colab_training.ipynb`](colab_training.ipynb) (Unsloth + TRL SFT) and Colab: [open notebook](https://colab.research.google.com/drive/1FnXLF6ni6HzkoGlJWep_WSDjsC6hrX0i?usp=sharing). [`train_online.py`](train_online.py) points here. |
-| **README links to everything + inline plots** | **Met**  | **HF + Colab + blog writeup** ([`BLOG.md`](BLOG.md)) + inline plots. Optional: public **YouTube** URL in [Writeup](#writeup). |
-
 ## Hugging Face Space
-
 - **Space URL:** <https://huggingface.co/spaces/chaudharyjatin20/openenv-support-agent>  
-  Confirm it lists as **public** and loads while **logged out** (cloneable if the platform shows that).
-
-(Repository metadata in the front matter above is for Spaces; the live app is served from your Space build — typically Docker + `python -m server.app`.)
 
 ## Colab
 
@@ -34,8 +20,8 @@ pinned: false
 
 ## Writeup
 
-- **Blog:** [`BLOG.md`](BLOG.md) (same content you can publish on Medium / dev.to / your site).
-- **Blog URL:** *https://github.com/jatinchaudhary20/openenv-support-agent/blob/main/BLOG.md* if you add a walkthrough.
+- **Blog:** [`BLOG.md`](BLOG.md)
+- **Blog URL:** *https://github.com/jatinchaudhary20/openenv-support-agent/blob/main/BLOG.md* 
 
 ## Training evidence (plots)
 
@@ -50,7 +36,7 @@ The repo includes **at least** a **loss** curve and a **mean reward** (rollout) 
 
 **Regenerate (optional):** `python scripts/render_submission_plots.py` (requires `pip install pillow` or install from `requirements.txt`).
 
-**Training logs (JSON):** the notebook writes `training_logs/training_metrics.json` and `training_logs/env_eval.json` (see [`training_logs/README.md`](training_logs/README.md)). Schema example: [`training_logs/training_metrics.example.json`](training_logs/training_metrics.example.json). Hugging Face `outputs/` is gitignored; commit the JSON files after a run.
+**Training logs (JSON):** [`training_logs/training_metrics.json`](training_logs/training_metrics.json) (SFT `log_history` + optional `offline_eval`) and [`training_logs/env_eval.json`](training_logs/env_eval.json) (per-task reward). Both are **written** by `colab_training.ipynb` (sections 4 and 5); the repo also carries **starter** files you can replace after a full run. See [`training_logs/README.md`](training_logs/README.md). Hugging Face `outputs/` is gitignored.
 
 ### Inline plots (for judges)
 
@@ -104,37 +90,6 @@ The goal was a setting that is **industry-relevant** and still **pushes the agen
 
 **For rubrics that ask for “improvement in rewards”:** use **before/after** numbers (for example, mean return on `easy` / `medium` / `hard`) and/or **checkpoint** evals. A flat “reward” line on the same plot as loss, by itself, is **not** proof that the policy improved online.
 
-## Quick start (local)
-
-From the **repository root** (where `pyproject.toml` lives):
-
-```bash
-python -m pip install -U pip
-python -m pip install -e .
-python -m server.app
-```
-
-The app listens on **port 7860** by default. Health: `GET http://127.0.0.1:7860/healthz`.
-
-**Minimal path without editable install:**
-
-```bash
-pip install -r requirements.txt
-python -m server.app
-```
-
-## Colab
-
-1. Open [colab_training.ipynb](colab_training.ipynb) in Google Colab.  
-2. Clone the repo and `cd` to the project root.  
-3. Run cells in order. The notebook can run `pip install -e .` and start `python -m server.app` if port **7860** is not already in use.
-
-## For judges (short demo)
-
-1. Confirm the server: `/healthz` returns **200**.  
-2. Show **one** task reset and **a few** tool calls, with state or logs on screen.  
-3. In one line, say what is **new**: multi-step support with partial credit and an explicit **tool** API, not a single chat turn.  
-4. Show **evidence of progress**: a training curve **and** either **before/after** env metrics or a **vs baseline** comparison, if you have them.
 
 ## Project layout
 
