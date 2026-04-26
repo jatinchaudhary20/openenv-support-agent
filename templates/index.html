@@ -280,13 +280,54 @@
 
     function trainedResponse(st) {
       const cat = st.category || "issue";
+      const turn = st.userFeedbackTurns || 0;
+      const emotion = st.emotion || "neutral";
       if (st.escalated) {
         return "We have raised your issue and a support person will contact you further.";
       }
-      if ((st.userFeedbackTurns || 0) === 0) {
-        return `I understand your ${cat} issue and I am sorry for the inconvenience. I have applied a fix path and shared next steps. Are you satisfied with this resolution?`;
+
+      const playbooks = {
+        billing: {
+          intro: "I checked the payment ledger and transaction timeline for your account.",
+          fixes: [
+            "Please retry once after refreshing payment settings; if amount is still deducted, we will reverse it.",
+            "I have initiated a billing verification ticket and marked your transaction for priority reconciliation.",
+            "I am applying an alternate billing route and validating duplicate charge protection."
+          ],
+        },
+        refund: {
+          intro: "I reviewed your order and refund eligibility details.",
+          fixes: [
+            "I have started the refund workflow and flagged it as expedited.",
+            "I am validating return and replacement paths so you get the fastest resolution.",
+            "I have reopened the refund check with manual verification to avoid further delay."
+          ],
+        },
+        technical: {
+          intro: "I reviewed crash signals and app diagnostics linked to your issue.",
+          fixes: [
+            "Please clear cache and retry after reinstall; I am also attaching logs for engineering review.",
+            "I am escalating this to technical support with high priority and adding your reproduction steps.",
+            "I have opened a backend stability check and asked engineering for a guided workaround."
+          ],
+        },
+      };
+
+      const styleByEmotion = {
+        high_negative: "I understand this is very frustrating and I take full ownership of getting this fixed quickly.",
+        negative: "I understand this is still unresolved and I am continuing with a stronger fix path.",
+        neutral: "Thanks for the update. I am progressing the next resolution step now.",
+        positive: "Thanks for your patience. I am finalizing this carefully.",
+      };
+
+      const active = playbooks[cat] || playbooks.technical;
+      const empathyLead = styleByEmotion[emotion] || styleByEmotion.neutral;
+      const fixLine = active.fixes[Math.min(turn, active.fixes.length - 1)];
+
+      if (turn === 0) {
+        return `${empathyLead} ${active.intro} ${fixLine} Are you satisfied with this resolution?`;
       }
-      return `Thanks for clarifying. I am refining the ${cat} resolution with deeper checks and an alternate fix. Please try now and tell me if you are satisfied.`;
+      return `${empathyLead} Based on your latest feedback, I am refining this further. ${fixLine} Please check now and tell me if you are satisfied.`;
     }
 
     function chooseTrainedAction(st) {
