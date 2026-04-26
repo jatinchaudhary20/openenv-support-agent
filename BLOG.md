@@ -12,29 +12,17 @@ It made sense. It was practical. It solved a real problem.
 
 And it worked.
 
----
+## Project
 
-## Round 1 — It worked, but something felt off
+Early on, the idea was simple: build something that could handle support tickets. Later, in a welcome session, one line sat with me — that a project like this should feel **a little messy, a little human**, not like a perfect slide deck. I kept asking: is this more than a chatbot? The answer I shipped is what you see below: a **real environment** you can run, watch, and stress-test before it ever talks to a real customer.
 
-I cleared Round 1 with this idea. But when I came to campus, something changed.
+![Support Agent Environment Dashboard — run a ticket, watch rewards, and step through the flow](dashboard.png)
 
-During the welcome session, one line stuck with me:
+This is a **Support Agent Environment Dashboard** — a place to try scenarios, read rewards, and follow the run log while the system decides what to do next. Think of it as a **flight simulator for a support agent**. You pick a kind of problem (billing, refund, technical, or a prickly “angry” scenario), **reset** the world, and then either run a **simple baseline** (random policy) or the **trained policy** side by side. Along the top, a few numbers tell the story in one glance: **total reward** (how well the last stretch of actions went), **how many steps** the conversation has taken, whether the ticket is **resolved** yet, and whether the user is **satisfied** — the same things a team lead would try to read on a real queue.
 
-> "Your project should be a little messy. A little crazy."
+In the middle you drive the run: start over, or let the trained policy act. You can also **compare trained vs random** so you *see* the gap instead of only believing a training loss curve. Smaller charts show **reward per step** and **trained vs random** when you use the benchmark — so “did it get better?” is not just a feeling.
 
-That hit me harder than expected.
-
-Because my project… wasn't.
-
-It was clean. Logical. Safe.
-
-And suddenly I started questioning everything:
-
-* Is this too basic?
-* Is this just another chatbot?
-* Am I missing something?
-
-I genuinely had a small breakdown trying to figure out what to do next.
+The **chat** is where it gets human: the user can push back (“very bad,” “nooo”) while the agent works through real routes, like billing and duplicate-charge protections. A **run log** on the side is the honest layer — emotions seen, each reward, and the moment the system says it has **hit an escalation threshold** and should hand off to a person. You are not reading a single pretty answer; you are **watching a policy under pressure**.
 
 ---
 
