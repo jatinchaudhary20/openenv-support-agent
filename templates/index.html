@@ -429,21 +429,20 @@
       const stepResponse = await postJson("/step", payload);
       const backendPayload = extractToolPayload(stepResponse);
 
-      const reward = typeof backendPayload.step_reward === "number"
-        ? backendPayload.step_reward
-        : rewardFor(choice.tool, choice.args, state);
-
-      const localNextState = applyAction(choice.tool, choice.args, state);
-      let mergedState = localNextState;
-      const backendState = backendPayload.ticket_state;
-      if (
-        backendState &&
-        typeof backendState === "object" &&
-        (backendState.ticket || "") === (state.ticket || "")
-      ) {
-        mergedState = { ...localNextState, ...backendState, ticket: state.ticket };
+      // Trusting pure backend values for rewards and updated states
+      let reward = 0;
+      if (stepResponse && stepResponse.observation) {
+        reward = stepResponse.observation.reward || 0;
       }
-      state = mergedState;
+      
+      let newTicketState = backendPayload.ticket_state;
+      if (!newTicketState && stepResponse && stepResponse.observation && stepResponse.observation.metadata) {
+        newTicketState = stepResponse.observation.metadata.ticket_state;
+      }
+
+      if (newTicketState && typeof newTicketState === "object") {
+        state = { ...state, ...newTicketState, ticket: state.ticket };
+      }
 
       totalReward += reward;
       steps.push({ ...choice, reward });
@@ -526,6 +525,19 @@
       // Update UI state for mock policy
       state.emotion = emotion;
       
+      // Tell backend about feedback 
+      const feedbackPayload = {
+        action: {
+          type: "call_tool",
+          tool_name: "feedback",
+          arguments: { message: text },
+        },
+      };
+      
+      try {
+        await postJson("/step", feedbackPayload); // Send blind action to let environment register if configured
+      } catch(e) {}
+      
       const sat = parseSatisfaction(text);
       if (sat === true) {
         state.userSatisfied = true;
@@ -544,7 +556,8 @@
     });
 
     ticketInput.value = "Received wrong product and need refund urgently";
-    resetEnv().catch((e) => appendLog(`Init error: ${e.message}`));
+    // Defer reset to let dashboard initialize visually before backend pings
+    // resetEnv().catch((e) => appendLog(`Init error: ${e.message}`)); 
   </script>
 </body>
 </html>

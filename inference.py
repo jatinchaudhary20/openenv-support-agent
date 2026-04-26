@@ -24,36 +24,6 @@ def _result_parts(result):
     return observation, reward, done, metadata
 
 
-def _initial_ticket_state(task: str) -> dict:
-    if task == "easy":
-        ticket = "Payment failed but money deducted"
-    elif task == "medium":
-        ticket = "Received wrong product, want refund"
-    else:
-        ticket = "App crashes when I open it"
-    return {
-        "ticket": ticket,
-        "category": None,
-        "priority": None,
-        "response": None,
-        "resolved": False,
-        "user_satisfied": None,
-    }
-
-
-def _apply_action(tool: str, args: dict, st: dict) -> dict:
-    next_state = dict(st)
-    if tool == "classify":
-        next_state["category"] = (args.get("category") or "").lower()
-        next_state["priority"] = (args.get("priority") or "").lower()
-    elif tool == "respond":
-        next_state["response"] = args.get("message", "")
-        next_state["user_satisfied"] = True
-    elif tool == "resolve" and next_state.get("category") and next_state.get("priority") and next_state.get("response"):
-        next_state["resolved"] = True
-    return next_state
-
-
 def _hf_decision(ticket_state, env_tools, retries=3):
     tool_descriptions = "\n".join([f"- {t.name}: {t.description}" for t in env_tools])
     
@@ -116,7 +86,7 @@ def run_baseline():
 
             total_reward = 0.0
             _, _, done, metadata = _result_parts(obs)
-            ticket_state = metadata.get("ticket", {}) or _initial_ticket_state(task)
+            ticket_state = metadata.get("ticket", {})
 
             for step in range(1, 7):
                 print(f"[STEP {step}] AI Thinking...")
@@ -134,7 +104,7 @@ def run_baseline():
                     # Environment is now the sole source of truth for rewards and state
                     step_reward = obs_reward if isinstance(obs_reward, (int, float)) else 0.0
                     total_reward += step_reward
-                    ticket_state = obs_metadata.get("ticket_state", {}) or _apply_action(action_name, args, ticket_state)
+                    ticket_state = obs_metadata.get("ticket_state", ticket_state)
                     
                     log_record = {
                         "timestamp": datetime.now(timezone.utc).isoformat(),
