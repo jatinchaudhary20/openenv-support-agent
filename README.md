@@ -11,7 +11,25 @@ pinned: false
 # OpenEnv Support Agent
 
 ## Hugging Face Space
-- **Space URL:** <https://huggingface.co/spaces/chaudharyjatin20/openenv-support-agent>  
+
+- **Space URL:** <https://huggingface.co/spaces/chaudharyjatin20/openenv-support-agent>
+
+**Pushing to GitHub does not update the Space by itself.** Do one of the following:
+
+1. **Link the Space to this GitHub repo (easiest)**  
+   On Hugging Face: open your Space → **Settings** → **Repository** (or “Duplicate / connect repository”) and point it at  
+   `https://github.com/jatinchaudhary20/openenv-support-agent` on branch **`main`**.  
+   After that, each **`git push`** to GitHub triggers a new Space build (check the Space **Logs** tab).
+
+2. **Push to Hugging Face’s Git** (if the Space is not connected to GitHub)  
+   ```bash
+   huggingface-cli login   # once: paste a write token from https://huggingface.co/settings/tokens
+   git remote add huggingface https://huggingface.co/spaces/chaudharyjatin20/openenv-support-agent
+   git push huggingface main
+   ```  
+   Use your HF **username** and a **token** with write access when Git asks for a password.
+
+The Space uses the repo **`Dockerfile`** (`python -m server.app` on port **7860**). If the build fails, open the Space **Logs** for the error.
 
 ## Colab
 
