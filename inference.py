@@ -10,12 +10,21 @@ except ImportError:
     print("openenv-core not installed. Cannot run MCPToolClient inference.")
     exit(1)
 
-HF_MODEL_NAME = os.getenv("HF_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct")
+HF_MODEL_NAME = os.getenv("HF_MODEL_NAME", "HuggingFaceTB/SmolLM2-1.7B-Instruct")
 LOG_PATH = os.getenv("EVAL_LOG_PATH", "evaluation_logs.jsonl")
 hf_client = InferenceClient(token=os.getenv("HF_TOKEN"))
 
 
-def _initial_ticket_state(task: str):
+def _result_parts(result):
+    """Handle both OpenEnv result shapes: StepResult or direct observation."""
+    observation = getattr(result, "observation", result)
+    reward = getattr(result, "reward", None)
+    done = getattr(result, "done", False)
+    metadata = getattr(observation, "metadata", None) or {}
+    return observation, reward, done, metadata
+
+
+def _initial_ticket_state(task: str) -> dict:
     if task == "easy":
         ticket = "Payment failed but money deducted"
     elif task == "medium":
@@ -31,14 +40,77 @@ def _initial_ticket_state(task: str):
     }
 
 
+def _expected_labels(ticket: str) -> tuple[str, str]:
+    text = ticket.lower()
+    if any(term in text for term in ["refund", "wrong product", "return", "replacement", "defective", "damaged"]):
+        category = "refund"
+    elif any(term in text for term in ["payment", "billing", "charged", "invoice", "deducted", "subscription"]):
+        category = "billing"
+    else:
+        category = "technical"
+    priority = "high" if category == "technical" or any(term in text for term in ["urgent", "asap", "furious", "angry"]) else "medium"
+    return category, priority
+
+
+def _reward_for_action(tool: str, args: dict, st: dict) -> float:
+    if tool == "classify":
+        exp_category, exp_priority = _expected_labels(st.get("ticket", ""))
+        c = 1.0 if (args.get("category") or "").lower() == exp_category else -0.5
+        p = 1.0 if (args.get("priority") or "").lower() == exp_priority else -0.5
+        return c + p
+    if tool == "respond":
+        message = (args.get("message") or "").lower()
+        empathy_terms = ["sorry", "understand", "apologize", "thanks", "assist"]
+        return 1.0 if any(term in message for term in empathy_terms) else 0.2
+    if tool == "resolve":
+        return 2.0 if st.get("category") and st.get("priority") and st.get("response") else -1.0
+    return 0.0
+
+
+def _apply_action(tool: str, args: dict, st: dict) -> dict:
+    next_state = dict(st)
+    if tool == "classify":
+        next_state["category"] = (args.get("category") or "").lower()
+        next_state["priority"] = (args.get("priority") or "").lower()
+    elif tool == "respond":
+        next_state["response"] = args.get("message", "")
+    elif tool == "resolve" and next_state.get("category") and next_state.get("priority") and next_state.get("response"):
+        next_state["resolved"] = True
+    return next_state
+
+
 def _rule_based_decision(ticket_state):
     ticket = ticket_state.get("ticket", "").lower()
+    billing_terms = [
+        "payment", "bill", "billing", "charged", "charge", "invoice",
+        "deducted", "transaction", "upi", "card", "wallet", "subscription",
+    ]
+    refund_terms = [
+        "refund", "wrong product", "return", "replacement", "cancel order",
+        "cancelled order", "order issue", "defective", "damaged", "not received",
+    ]
+    technical_terms = [
+        "crash", "bug", "error", "issue logging in", "login", "otp",
+        "app not opening", "not opening", "slow", "freeze", "stuck",
+        "failed to load", "server down",
+    ]
+    urgent_terms = ["urgent", "asap", "immediately", "furious", "angry", "frustrated", "worst", "unacceptable"]
+
+    def infer_labels(text):
+        if any(t in text for t in refund_terms):
+            category = "refund"
+        elif any(t in text for t in billing_terms):
+            category = "billing"
+        elif any(t in text for t in technical_terms):
+            category = "technical"
+        else:
+            category = "technical"
+        priority = "high" if category == "technical" or any(t in text for t in urgent_terms) else "medium"
+        return category, priority
+
     if not ticket_state.get("category"):
-        if "payment" in ticket:
-            return {"tool": "classify", "args": {"category": "billing", "priority": "medium"}}
-        if "refund" in ticket or "wrong" in ticket:
-            return {"tool": "classify", "args": {"category": "refund", "priority": "medium"}}
-        return {"tool": "classify", "args": {"category": "technical", "priority": "high"}}
+        category, priority = infer_labels(ticket)
+        return {"tool": "classify", "args": {"category": category, "priority": priority}}
     if not ticket_state.get("response"):
         return {
             "tool": "respond",
@@ -52,7 +124,6 @@ def _hf_decision(ticket_state):
         "You are a support agent. Decide next action as strict JSON with keys: "
         'tool and args. Allowed tools: classify, respond, resolve. '
         "If classifying, include category and priority. "
-        "IMPORTANT: Manage the customer's frustration_level! If it reaches 5, they will rage quit. Always be empathetic. "
         f"Ticket state: {json.dumps(ticket_state)}"
     )
     completion = hf_client.chat_completion(
@@ -71,55 +142,6 @@ def _hf_decision(ticket_state):
         raise ValueError("Missing tool/args in HF action")
     return parsed
 
-
-def _expected_labels(ticket: str):
-    text = (ticket or "").lower()
-    if "payment" in text:
-        return "billing", "medium"
-    if "refund" in text or "wrong" in text:
-        return "refund", "medium"
-    return "technical", "high"
-
-
-def _reward_for_action(ticket_state, action_name, args):
-    classification = 0.0
-    priority = 0.0
-    empathy = 0.0
-    resolution = 0.0
-    if action_name == "classify":
-        expected_category, expected_priority = _expected_labels(ticket_state.get("ticket", ""))
-        classification = 1.0 if args.get("category") == expected_category else -0.5
-        priority = 1.0 if args.get("priority") == expected_priority else -0.5
-    elif action_name == "respond":
-        msg = (args.get("message") or "").lower()
-        empathy_terms = ["sorry", "understand", "apologize", "thanks", "assist"]
-        empathy = 1.0 if any(term in msg for term in empathy_terms) else 0.2
-    elif action_name == "resolve":
-        if ticket_state.get("category") and ticket_state.get("priority") and ticket_state.get("response"):
-            resolution = 2.0
-        else:
-            resolution = -1.0
-    total = classification + priority + empathy + resolution
-    return total, {
-        "classification": classification,
-        "priority": priority,
-        "empathy": empathy,
-        "resolution": resolution,
-    }
-
-
-def _apply_action(ticket_state, action_name, args):
-    next_state = dict(ticket_state)
-    if action_name == "classify":
-        next_state["category"] = args.get("category")
-        next_state["priority"] = args.get("priority")
-    elif action_name == "respond":
-        next_state["response"] = args.get("message")
-    elif action_name == "resolve":
-        if next_state.get("category") and next_state.get("priority") and next_state.get("response"):
-            next_state["resolved"] = True
-    return next_state
-
 def run_baseline():
     tasks = ["easy", "medium", "hard"]
     all_records = []
@@ -128,11 +150,15 @@ def run_baseline():
     with MCPToolClient(base_url="http://localhost:7860").sync() as env:
         for task in tasks:
             print(f"---\n[START] task={task}")
-            env.reset(task=task)
+            obs = env.reset(task=task)
             
-            total_reward = 0
-            ticket_state = _initial_ticket_state(task)
-            done = False
+            # Fetch tools
+            tools = env.list_tools()
+            tool_descriptions = "\n".join([f"- {t.name}: {t.description}" for t in tools])
+
+            total_reward = 0.0
+            _, _, done, metadata = _result_parts(obs)
+            ticket_state = metadata.get("ticket", {}) or _initial_ticket_state(task)
 
             for step in range(1, 6):
                 print(f"[STEP {step}] AI Thinking...")
@@ -149,11 +175,15 @@ def run_baseline():
                     decision_source = "rule_fallback"
 
                 print(f"Agent Action chosen: {action_name}{args}")
-                env.call_tool(action_name, **args)
-                reward, reward_breakdown = _reward_for_action(ticket_state, action_name, args)
-                ticket_state = _apply_action(ticket_state, action_name, args)
-                done = bool(ticket_state.get("resolved", False))
-                total_reward += reward
+                obs = env.call_tool(action_name, **args)
+                _, obs_reward, done, obs_metadata = _result_parts(obs)
+
+                local_reward = _reward_for_action(action_name, args, ticket_state)
+                step_reward = obs_reward if isinstance(obs_reward, (int, float)) else local_reward
+                total_reward += step_reward
+
+                ticket_state = obs_metadata.get("ticket_state", {}) or _apply_action(action_name, args, ticket_state)
+                done = bool(done) or bool(ticket_state.get("resolved"))
 
                 log_record = {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -162,14 +192,13 @@ def run_baseline():
                     "decision_source": decision_source,
                     "action": action_name,
                     "args": args,
-                    "reward": reward,
-                    "reward_breakdown": reward_breakdown,
+                    "reward": step_reward,
+                    "reward_breakdown": obs_metadata.get("reward_breakdown", {}),
                     "done": done,
-                    "ticket_state": ticket_state,
                 }
                 all_records.append(log_record)
                 print(json.dumps(log_record))
-                print(f"Ticket State: {ticket_state} | Reward: {reward}")
+                print(f"Observation: {obs_metadata} | Reward: {step_reward}")
 
                 if done:
                     print(f"[END] Task {task} resolved successfully in {step} steps. Score: {total_reward}")

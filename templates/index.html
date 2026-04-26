@@ -1,390 +1,484 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OpenEnv Support Agent Dashboard</title>
-    <style>
-      :root {
-        --bg: #0b1020;
-        --card: #141a2e;
-        --text: #e9eefc;
-        --muted: #9ca8c7;
-        --accent: #6ea8fe;
-        --ok: #26c281;
-        --bad: #ff6b6b;
-        --warn: #ffd166;
-        --border: #28314f;
-      }
-      body { font-family: Inter, Arial, sans-serif; margin: 0; background: radial-gradient(circle at top, #142040, #0b1020 50%); color: var(--text); }
-      .container { max-width: 1200px; margin: 20px auto; padding: 0 16px; }
-      .title { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 14px; }
-      .muted { color: var(--muted); font-size: 13px; }
-      .grid { display: grid; grid-template-columns: 420px 1fr; gap: 16px; }
-      .panel { background: rgba(20,26,46,.88); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
-      .subpanel { background:#0f1529; border:1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; }
-      .kpis { display:grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin: 10px 0 14px; }
-      .kpi { background: var(--card); border:1px solid var(--border); border-radius: 10px; padding: 10px; }
-      .kpi .v { font-size: 22px; font-weight: 700; margin-top: 4px; }
-      textarea { width: 100%; min-height: 120px; resize: vertical; border-radius: 8px; background: #0f1529; color: var(--text); border:1px solid var(--border); padding: 8px; }
-      .row { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-      button { background:#1b2442; color:var(--text); border:1px solid var(--border); border-radius: 8px; padding: 8px 11px; cursor:pointer; }
-      button:hover { border-color: var(--accent); }
-      .pill { display:inline-block; padding:2px 8px; border-radius: 999px; border:1px solid var(--border); font-size:12px; color:var(--muted);}
-      .ok { color: var(--ok); }
-      .bad { color: var(--bad); }
-      .warn { color: var(--warn); }
-      .log { border-top:1px solid var(--border); padding-top:8px; margin-top:8px; }
-      pre { background:#0f1529; border:1px solid var(--border); color:#c9d6ff; padding:8px; border-radius:8px; overflow:auto; }
-      .chart { margin-top: 10px; background:#0f1529; border:1px solid var(--border); border-radius: 10px; padding:8px; }
-      .compare { display:grid; grid-template-columns: repeat(2,1fr); gap:8px; }
-      .chatbox { background:#0f1529; border:1px solid var(--border); border-radius:10px; padding:8px; min-height:140px; max-height:240px; overflow:auto; }
-      .chatline { margin: 6px 0; }
-      .chat-user { color: #9ed0ff; }
-      .chat-agent { color: #b5f7c3; }
-      .tiny { font-size: 12px; color: var(--muted); }
-      input[type="text"] { width: 100%; border-radius: 8px; background: #0f1529; color: var(--text); border:1px solid var(--border); padding: 8px; }
-      @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2,1fr);} .compare {grid-template-columns:1fr;} }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="title">
-        <div>
-          <h2 style="margin:0;">OpenEnv Support Agent Dashboard</h2>
-          <div class="muted">Hackathon demo mode: live API loop, KPI cards, trajectory logs, and policy comparison.</div>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenEnv Support Agent Dashboard</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #141a2f;
+      --muted: #9fb0d0;
+      --text: #ecf2ff;
+      --green: #31d0aa;
+      --red: #ff6f91;
+      --blue: #64a6ff;
+      --border: #273157;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    h1 { margin: 0 0 16px; font-size: 28px; }
+    .sub { color: var(--muted); margin-bottom: 20px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .panel {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .panel h3 { margin: 0 0 12px; font-size: 16px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      background: #1d274a;
+      color: var(--text);
+      border: 1px solid #334276;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    button:hover { filter: brightness(1.1); }
+    button.primary { background: #2450a8; }
+    button.good { background: #1f7a65; }
+    button.warn { background: #8b324f; }
+    textarea, input {
+      width: 100%;
+      background: #0e1530;
+      color: var(--text);
+      border: 1px solid #334276;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    textarea { min-height: 90px; resize: vertical; }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .kpi {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      background: #111833;
+    }
+    .kpi .label { color: var(--muted); font-size: 12px; }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; }
+    .mono {
+      white-space: pre-wrap;
+      background: #0c1228;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow: auto;
+    }
+    .chat { max-height: 200px; overflow: auto; margin-bottom: 8px; }
+    .chat p { margin: 6px 0; padding: 6px 8px; border-radius: 8px; background: #101936; }
+    .chat p.user { border-left: 3px solid var(--blue); }
+    .chat p.agent { border-left: 3px solid var(--green); }
+    .tiny { font-size: 12px; color: var(--muted); }
+    .green { color: var(--green); }
+    .red { color: var(--red); }
+    .chart-wrap {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px;
+      background: #0e1530;
+    }
+    svg {
+      width: 100%;
+      height: 180px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Support Agent Environment Dashboard</h1>
+    <div class="sub">Run trained vs random policy, inspect rewards, and continue chat until user is satisfied.</div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="label">Total Reward</div><div id="kpiReward" class="val">0</div></div>
+      <div class="kpi"><div class="label">Steps</div><div id="kpiSteps" class="val">0</div></div>
+      <div class="kpi"><div class="label">Resolved</div><div id="kpiResolved" class="val red">No</div></div>
+      <div class="kpi"><div class="label">Satisfaction</div><div id="kpiSat" class="val">Unknown</div></div>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <h3>Ticket Presets</h3>
+        <div class="row">
+          <button data-preset="Payment failed but money deducted">Billing</button>
+          <button data-preset="Received wrong product and need refund urgently">Refund</button>
+          <button data-preset="App crashes on launch after update">Technical</button>
+          <button data-preset="I am furious, your app stole my money and no one helps">Angry</button>
         </div>
-        <span class="pill">/reset + /step + /healthz</span>
+        <div style="margin-top:10px">
+          <textarea id="ticketInput" placeholder="Enter a customer ticket..."></textarea>
+        </div>
       </div>
 
-      <div class="kpis">
-        <div class="kpi"><div class="muted">Total Reward</div><div id="kScore" class="v">0.00</div></div>
-        <div class="kpi"><div class="muted">Resolved</div><div id="kResolved" class="v">no</div></div>
-        <div class="kpi"><div class="muted">Steps</div><div id="kSteps" class="v">0</div></div>
-        <div class="kpi"><div class="muted">Empathy Avg</div><div id="kEmp" class="v">0.00</div></div>
+      <div class="panel">
+        <h3>Main Flow</h3>
+        <div class="row">
+          <button id="resetBtn" class="warn">Reset Environment</button>
+          <button id="trainedBtn" class="primary">Run Trained Policy</button>
+        </div>
+        <div class="tiny" style="margin-top:8px">Trained policy pauses after response and waits for user feedback.</div>
       </div>
 
-      <div class="grid">
-        <div class="panel">
-          <div class="subpanel">
-            <strong>Ticket Presets</strong>
-            <div class="tiny">All 4 presets grouped here</div>
-            <textarea id="ticket">Payment failed but money deducted</textarea>
-            <div class="row">
-              <button class="preset" data-ticket="Payment failed but money deducted">Billing preset</button>
-              <button class="preset" data-ticket="Received wrong product, want refund">Refund preset</button>
-              <button class="preset" data-ticket="App crashes when I open it">Technical preset</button>
-              <button class="preset" data-ticket="I am frustrated and angry, refund now!">Angry preset</button>
-            </div>
-          </div>
-
-          <div class="subpanel">
-            <strong>Main Flow</strong>
-            <div class="tiny">Reset + Run trained grouped here</div>
-            <div class="row">
-              <button id="resetBtn">Reset</button>
-              <button id="runBtn">Run Trained Policy</button>
-            </div>
-          </div>
-
-          <div class="subpanel">
-            <strong>Benchmark Flow</strong>
-            <div class="tiny">Run random + Compare grouped here</div>
-            <div class="row">
-              <button id="runRandomBtn">Run Random Policy</button>
-              <button id="compareBtn">Compare Random vs Trained</button>
-            </div>
-          </div>
-
-          <div class="subpanel">
-            <strong>Continue Chat</strong>
-            <div class="tiny">Agent asks if satisfied. Type "satisfied" to enable resolve reward.</div>
-            <div class="chatbox" id="chatbox"></div>
-            <div class="row">
-              <input id="chatInput" type="text" placeholder='Type user reply, e.g. "not satisfied" or "satisfied"' />
-              <button id="chatSendBtn">Continue Chat</button>
-            </div>
-          </div>
-
-          <p id="status" class="muted">Idle</p>
-          <div class="chart">
-            <div class="muted">Reward per Step</div>
-            <svg id="rewardChart" viewBox="0 0 420 120" width="100%" height="120"></svg>
-          </div>
-          <div class="chart">
-            <div class="muted">Reward Breakdown (latest step)</div>
-            <svg id="breakdownChart" viewBox="0 0 420 120" width="100%" height="120"></svg>
-          </div>
-        </div>
-
-        <div class="panel">
-          <strong>Step Timeline</strong>
-          <div id="logs"></div>
-          <div class="chart">
-            <div class="muted">Policy Comparison</div>
-            <div class="compare">
-              <pre id="cmpRandom">Random: not run</pre>
-              <pre id="cmpTrained">Trained: not run</pre>
-            </div>
-          </div>
+      <div class="panel">
+        <h3>Benchmark Flow</h3>
+        <div class="row">
+          <button id="randomBtn">Run Random Policy</button>
+          <button id="compareBtn" class="good">Compare Trained vs Random</button>
         </div>
       </div>
     </div>
 
-    <script>
-      const MAX_STEPS = 5;
-      const EMPATHY_TERMS = ["sorry", "understand", "apologize", "thanks", "assist"];
-      let state = {};
-      let totalScore = 0;
-      let logs = [];
-      let chat = [];
+    <div class="grid">
+      <div class="panel">
+        <h3>Live Graphs</h3>
+        <div class="tiny">Reward per step (current run)</div>
+        <div class="chart-wrap" style="margin:6px 0 10px">
+          <svg id="rewardChart" viewBox="0 0 320 180"></svg>
+        </div>
+        <div class="tiny">Trained vs Random score (last compare)</div>
+        <div class="chart-wrap">
+          <svg id="compareChart" viewBox="0 0 320 180"></svg>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Continue Chat</h3>
+        <div id="chatBox" class="chat mono"></div>
+        <input id="chatInput" placeholder="Type: satisfied / not satisfied / no / still issue ..." />
+        <div class="row" style="margin-top:8px">
+          <button id="chatSendBtn" class="primary">Send</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Run Log</h3>
+        <div id="logBox" class="mono"></div>
+      </div>
+    </div>
+  </div>
 
-      const statusEl = document.getElementById("status");
-      const logsEl = document.getElementById("logs");
-      const kScore = document.getElementById("kScore");
-      const kResolved = document.getElementById("kResolved");
-      const kSteps = document.getElementById("kSteps");
-      const kEmp = document.getElementById("kEmp");
-      const rewardChart = document.getElementById("rewardChart");
-      const breakdownChart = document.getElementById("breakdownChart");
-      const chatboxEl = document.getElementById("chatbox");
-      const chatInputEl = document.getElementById("chatInput");
+  <script>
+    const logBox = document.getElementById("logBox");
+    const chatBox = document.getElementById("chatBox");
+    const ticketInput = document.getElementById("ticketInput");
+    const chatInput = document.getElementById("chatInput");
+    const kpiReward = document.getElementById("kpiReward");
+    const kpiSteps = document.getElementById("kpiSteps");
+    const kpiResolved = document.getElementById("kpiResolved");
+    const kpiSat = document.getElementById("kpiSat");
+    const rewardChart = document.getElementById("rewardChart");
+    const compareChart = document.getElementById("compareChart");
 
-      function expectedLabels(ticket) {
-        const t = (ticket || "").toLowerCase();
-        if (t.includes("payment")) return ["billing", "medium"];
-        if (t.includes("refund") || t.includes("wrong")) return ["refund", "medium"];
-        return ["technical", "high"];
-      }
-      function sentiment(ticket) {
-        const t = (ticket || "").toLowerCase();
-        return ["angry","frustrated","worst","terrible"].some(x => t.includes(x)) ? "angry" : "neutral";
-      }
-      function rewardForAction(st, tool, args) {
-        let c=0,p=0,e=0,pen=0;
-        if (tool === "classify") {
-          const [ec,ep] = expectedLabels(st.ticket || "");
-          c = args.category === ec ? 1 : -0.5;
-          p = args.priority === ep ? 1 : -0.5;
-        } else if (tool === "respond") {
-          const msg = (args.message || "").toLowerCase();
-          e = EMPATHY_TERMS.some(x => msg.includes(x)) ? 1 : 0.2;
-        } else if (tool === "resolve") {
-          // Resolve reward only if user confirmed satisfaction.
-          if (st.userSatisfied && st.category && st.priority && st.response) pen = 2;
-          else pen = 0;
-        }
-        return { classification:c, priority:p, empathy:e, penalty:pen, total:c+p+e+pen };
-      }
-      function applyAction(st, tool, args) {
-        const n = { ...st };
-        if (tool === "classify") { n.category = args.category; n.priority = args.priority; }
-        else if (tool === "respond") { n.response = args.message; }
-        else if (tool === "resolve" && n.userSatisfied && n.category && n.priority && n.response) { n.resolved = true; }
-        return n;
-      }
-      function trainedResponse(st) {
-        const sentimentTag = sentiment(st.ticket) === "angry" ? "I completely understand your frustration. " : "I understand your concern. ";
-        if (!st.response) {
-          return `${sentimentTag}I am sorry for the inconvenience. Proposed solution: we will process this immediately. Are you satisfied with this solution?`;
-        }
-        return `${sentimentTag}Updated solution: I can escalate priority and provide a faster resolution path. Are you satisfied now?`;
-      }
-      function chooseTrainedAction(st) {
-        const t = (st.ticket || "").toLowerCase();
-        if (!st.category) {
-          if (t.includes("payment")) return { tool_name:"classify", arguments:{category:"billing", priority:"medium"} };
-          if (t.includes("refund") || t.includes("wrong")) return { tool_name:"classify", arguments:{category:"refund", priority:"medium"} };
-          return { tool_name:"classify", arguments:{category:"technical", priority:"high"} };
-        }
-        if (!st.response || !st.userSatisfied) {
-          return { tool_name:"respond", arguments:{message: trainedResponse(st)} };
-        }
-        return { tool_name:"resolve", arguments:{} };
-      }
-      function chooseRandomAction() {
-        const actions = [
-          { tool_name:"classify", arguments:{category:"billing", priority:"medium"} },
-          { tool_name:"classify", arguments:{category:"refund", priority:"medium"} },
-          { tool_name:"classify", arguments:{category:"technical", priority:"high"} },
-          { tool_name:"respond", arguments:{message:"Issue noted. Proposed fix sent. Are you satisfied?"} },
-          { tool_name:"respond", arguments:{message:"I understand and I am sorry. Proposed fix: refund + expedited handling. Are you satisfied?"} },
-        ];
-        if (state.userSatisfied) actions.push({ tool_name:"resolve", arguments:{} });
-        return actions[Math.floor(Math.random() * actions.length)];
-      }
-      async function postJson(path, body) {
-        const r = await fetch(path, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) });
-        if (!r.ok) throw new Error(`${path} failed: ${r.status} ${await r.text()}`);
-        return r.json();
-      }
+    let state = {};
+    let totalReward = 0;
+    let steps = [];
+    let awaitingFeedback = false;
+    let compareStats = { trained: 0, random: 0 };
 
-      function drawRewardChart() {
-        const vals = logs.map(l => l.reward);
-        if (!vals.length) { rewardChart.innerHTML = ""; return; }
-        const min = Math.min(...vals, 0), max = Math.max(...vals, 1), pad = 8;
-        const w = 420, h = 120, span = (max - min) || 1;
-        let points = vals.map((v,i) => {
-          const x = pad + i * ((w - 2*pad) / Math.max(1, vals.length - 1));
-          const y = h - pad - ((v - min) / span) * (h - 2*pad);
-          return `${x},${y}`;
-        }).join(" ");
-        rewardChart.innerHTML = `<polyline fill="none" stroke="#6ea8fe" stroke-width="2" points="${points}" />`;
-      }
+    function appendLog(line) {
+      logBox.textContent += line + "\n";
+      logBox.scrollTop = logBox.scrollHeight;
+    }
 
-      function drawBreakdownChart() {
-        if (!logs.length) { breakdownChart.innerHTML = ""; return; }
-        const b = logs[logs.length - 1].breakdown;
-        const items = [
-          ["class", b.classification],
-          ["priority", b.priority],
-          ["empathy", b.empathy],
-          ["penalty", b.penalty],
-        ];
-        const w = 420, h = 120, bw = 70, gap = 26, baseY = 60, scale = 24;
-        let svg = "";
-        items.forEach((it, i) => {
-          const x = 20 + i * (bw + gap);
-          const v = it[1];
-          const bh = Math.abs(v) * scale;
-          const y = v >= 0 ? baseY - bh : baseY;
-          const color = v >= 0 ? "#26c281" : "#ff6b6b";
-          svg += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" fill="${color}" opacity="0.9"></rect>`;
-          svg += `<text x="${x + 8}" y="${h - 8}" fill="#9ca8c7" font-size="11">${it[0]}</text>`;
-        });
-        svg += `<line x1="10" x2="410" y1="${baseY}" y2="${baseY}" stroke="#314063"/>`;
-        breakdownChart.innerHTML = svg;
-      }
+    function appendChat(role, text) {
+      const p = document.createElement("p");
+      p.className = role === "user" ? "user" : "agent";
+      p.textContent = (role === "user" ? "User: " : "Agent: ") + text;
+      chatBox.appendChild(p);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
 
-      function renderChat() {
-        chatboxEl.innerHTML = chat.map((m) => {
-          const cls = m.role === "user" ? "chat-user" : "chat-agent";
-          return `<div class="chatline ${cls}"><strong>${m.role === "user" ? "User" : "Agent"}:</strong> ${m.text}</div>`;
-        }).join("");
-      }
+    function parseSatisfaction(text) {
+      const t = (text || "").toLowerCase().trim();
+      const neg = ["not satisfied", "no", "still", "issue", "problem", "doesn't work", "dont work", "didn't help", "didnt help", "bad"];
+      const pos = ["satisfied", "yes", "resolved", "works", "fixed", "thank you", "thanks"];
+      if (neg.some((w) => t.includes(w))) return false;
+      if (pos.some((w) => t.includes(w))) return true;
+      return null;
+    }
 
-      function render() {
-        const empathyVals = logs.map(l => l.breakdown.empathy);
-        const empathyAvg = empathyVals.length ? empathyVals.reduce((a,b)=>a+b,0)/empathyVals.length : 0;
-        kScore.textContent = totalScore.toFixed(2);
-        kResolved.textContent = state.resolved ? "yes" : "no";
-        kSteps.textContent = String(logs.length);
-        kEmp.textContent = empathyAvg.toFixed(2);
-        logsEl.innerHTML = logs.map((l) => `
-          <div class="log">
-            <div><strong>Step ${l.step}</strong> <span class="pill">${l.mode}</span></div>
-            <div class="muted">Action: <code>${JSON.stringify(l.action)}</code></div>
-            <div>Reward: <strong>${l.reward.toFixed(2)}</strong> | Breakdown: <code>${JSON.stringify(l.breakdown)}</code></div>
-            <div class="muted">Sentiment: ${sentiment(l.state.ticket)} | Resolved: ${l.state.resolved ? "yes":"no"}</div>
-          </div>
-        `).join("");
-        drawRewardChart();
-        drawBreakdownChart();
-        renderChat();
-      }
+    function expectedLabels(ticket) {
+      const t = (ticket || "").toLowerCase();
+      const billingTerms = ["payment", "bill", "billing", "charged", "charge", "invoice", "deducted", "transaction", "upi", "card", "wallet", "subscription"];
+      const refundTerms = ["refund", "wrong product", "return", "replacement", "cancel order", "cancelled order", "order issue", "defective", "damaged", "not received"];
+      const technicalTerms = ["crash", "bug", "error", "issue logging in", "login", "otp", "app not opening", "not opening", "slow", "freeze", "stuck", "failed to load", "server down"];
+      const urgentTerms = ["urgent", "asap", "immediately", "furious", "angry", "frustrated", "worst", "unacceptable"];
 
-      async function resetEnv() {
-        const ticket = document.getElementById("ticket").value.trim();
-        if (!ticket) throw new Error("Please enter a ticket.");
-        await postJson("/reset", { ticket });
-        state = { ticket, category:null, priority:null, response:null, resolved:false, userSatisfied:false };
-        totalScore = 0;
-        logs = [];
-        chat = [{ role:"user", text: ticket }];
-        render();
-      }
+      let category = "technical";
+      if (refundTerms.some((w) => t.includes(w))) category = "refund";
+      else if (billingTerms.some((w) => t.includes(w))) category = "billing";
+      else if (technicalTerms.some((w) => t.includes(w))) category = "technical";
 
-      async function runOneStep(mode) {
-        if (!state.ticket) throw new Error("Reset environment first.");
-        if (state.resolved) return;
-        const action = mode === "random" ? chooseRandomAction() : chooseTrainedAction(state);
-        await postJson("/step", { action: { type:"call_tool", tool_name: action.tool_name, arguments: action.arguments } });
-        const breakdown = rewardForAction(state, action.tool_name, action.arguments);
-        state = applyAction(state, action.tool_name, action.arguments);
-        totalScore += breakdown.total;
-        logs.push({ step: logs.length + 1, mode, action, reward: breakdown.total, breakdown, state: { ...state } });
-        if (action.tool_name === "respond") chat.push({ role:"agent", text: action.arguments.message });
-        if (action.tool_name === "resolve" && state.resolved) chat.push({ role:"agent", text:"Great, marking this ticket as resolved." });
-        render();
-      }
+      const priority = category === "technical" || urgentTerms.some((w) => t.includes(w)) ? "high" : "medium";
+      return { category, priority };
+    }
 
-      async function runPolicy(mode) {
-        for (let i = 0; i < MAX_STEPS; i++) {
-          if (state.resolved) break;
-          await runOneStep(mode);
-          // Stop after agent response until user continues chat, unless already satisfied.
-          const last = logs[logs.length - 1];
-          if (last && last.action.tool_name === "respond" && !state.userSatisfied) break;
-        }
+    function rewardFor(tool, args, st) {
+      if (tool === "classify") {
+        const e = expectedLabels(st.ticket || "");
+        const c = (args.category || "").toLowerCase() === e.category ? 1 : -0.5;
+        const p = (args.priority || "").toLowerCase() === e.priority ? 1 : -0.5;
+        return c + p;
       }
-
-      async function comparePolicies() {
-        const ticket = document.getElementById("ticket").value.trim();
-        const run = async (mode) => {
-          await postJson("/reset", { ticket });
-          let s = { ticket, category:null, priority:null, response:null, resolved:false, userSatisfied:true };
-          let total = 0;
-          let steps = 0;
-          for (let i = 0; i < MAX_STEPS; i++) {
-            steps++;
-            const a = mode === "random" ? chooseRandomAction() : chooseTrainedAction(s);
-            await postJson("/step", { action: { type:"call_tool", tool_name:a.tool_name, arguments:a.arguments } });
-            const b = rewardForAction(s, a.tool_name, a.arguments);
-            total += b.total;
-            s = applyAction(s, a.tool_name, a.arguments);
-            if (s.resolved) break;
-          }
-          return { mode, total, resolved: s.resolved, steps };
-        };
-        const random = await run("random");
-        const trained = await run("trained");
-        document.getElementById("cmpRandom").textContent = JSON.stringify(random, null, 2);
-        document.getElementById("cmpTrained").textContent = JSON.stringify(trained, null, 2);
+      if (tool === "respond") {
+        const m = (args.message || "").toLowerCase();
+        return ["sorry", "understand", "apologize", "thanks", "assist"].some((w) => m.includes(w)) ? 1 : 0.2;
       }
+      if (tool === "resolve") {
+        if (st.userSatisfied !== true) return -1;
+        return st.category && st.priority && st.response ? 2 : -1;
+      }
+      return 0;
+    }
 
-      document.querySelectorAll(".preset").forEach(btn => {
-        btn.addEventListener("click", () => { document.getElementById("ticket").value = btn.dataset.ticket; });
+    function applyAction(tool, args, st) {
+      const n = { ...st };
+      if (tool === "classify") {
+        n.category = (args.category || "").toLowerCase();
+        n.priority = (args.priority || "").toLowerCase();
+      } else if (tool === "respond") {
+        n.response = args.message || "";
+      } else if (tool === "resolve" && n.category && n.priority && n.response && n.userSatisfied === true) {
+        n.resolved = true;
+      }
+      return n;
+    }
+
+    function trainedResponse(st) {
+      const cat = st.category || "issue";
+      if ((st.userFeedbackTurns || 0) === 0) {
+        return `I understand your ${cat} issue and I am sorry for the inconvenience. I have applied a fix path and shared next steps. Are you satisfied with this resolution?`;
+      }
+      return `Thanks for clarifying. I am refining the ${cat} resolution with deeper checks and an alternate fix. Please try now and tell me if you are satisfied.`;
+    }
+
+    function chooseTrainedAction(st) {
+      if (!st.category) {
+        const e = expectedLabels(st.ticket || "");
+        return { tool: "classify", args: e };
+      }
+      if (!st.response || st.userSatisfied === false) {
+        return { tool: "respond", args: { message: trainedResponse(st) } };
+      }
+      if (st.userSatisfied === true) {
+        return { tool: "resolve", args: {} };
+      }
+      return { tool: "respond", args: { message: trainedResponse(st) } };
+    }
+
+    function chooseRandomAction(st) {
+      const all = [
+        { tool: "classify", args: { category: "billing", priority: "medium" } },
+        { tool: "classify", args: { category: "refund", priority: "medium" } },
+        { tool: "classify", args: { category: "technical", priority: "high" } },
+        { tool: "respond", args: { message: "Sorry for the trouble, we are checking this now." } },
+        { tool: "resolve", args: {} },
+      ];
+      return all[Math.floor(Math.random() * all.length)];
+    }
+
+    async function postJson(path, payload) {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-      document.getElementById("resetBtn").addEventListener("click", async () => {
-        try { statusEl.className = "muted"; statusEl.textContent = "Resetting..."; await resetEnv(); statusEl.className = "ok"; statusEl.textContent = "Environment reset."; }
-        catch (e) { statusEl.className = "bad"; statusEl.textContent = e.message; }
-      });
-      document.getElementById("runBtn").addEventListener("click", async () => {
-        try { statusEl.className = "muted"; statusEl.textContent = "Running trained policy..."; await runPolicy("trained"); statusEl.className = "ok"; statusEl.textContent = "Run complete."; }
-        catch (e) { statusEl.className = "bad"; statusEl.textContent = e.message; }
-      });
-      document.getElementById("runRandomBtn").addEventListener("click", async () => {
-        try { statusEl.className = "muted"; statusEl.textContent = "Running random policy..."; await runPolicy("random"); statusEl.className = "warn"; statusEl.textContent = "Random run complete."; }
-        catch (e) { statusEl.className = "bad"; statusEl.textContent = e.message; }
-      });
-      document.getElementById("compareBtn").addEventListener("click", async () => {
-        try { statusEl.className = "muted"; statusEl.textContent = "Comparing policies..."; await comparePolicies(); statusEl.className = "ok"; statusEl.textContent = "Comparison ready."; }
-        catch (e) { statusEl.className = "bad"; statusEl.textContent = e.message; }
-      });
-      document.getElementById("chatSendBtn").addEventListener("click", async () => {
-        try {
-          if (!state.ticket) throw new Error("Reset environment first.");
-          const msg = chatInputEl.value.trim();
-          if (!msg) throw new Error("Enter a chat message.");
-          chat.push({ role:"user", text: msg });
-          chatInputEl.value = "";
-          const lower = msg.toLowerCase();
-          state.userSatisfied = lower.includes("satisfied") || lower.includes("yes");
-          statusEl.className = "muted";
-          statusEl.textContent = state.userSatisfied
-            ? "User marked satisfied. Agent can resolve now."
-            : "User not satisfied. Agent will continue with classify/respond flow.";
-          await runOneStep("trained");
-          if (state.userSatisfied && !state.resolved) await runOneStep("trained");
-          statusEl.className = "ok";
-          statusEl.textContent = "Chat continued.";
-        } catch (e) {
-          statusEl.className = "bad";
-          statusEl.textContent = e.message;
-        }
-      });
+      if (!res.ok) throw new Error(`${path} failed (${res.status})`);
+      return await res.json();
+    }
 
+    function render() {
+      kpiReward.textContent = totalReward.toFixed(2);
+      kpiSteps.textContent = String(steps.length);
+      const resolved = !!state.resolved;
+      kpiResolved.textContent = resolved ? "Yes" : "No";
+      kpiResolved.className = "val " + (resolved ? "green" : "red");
+      if (state.userSatisfied === true) kpiSat.textContent = "Satisfied";
+      else if (state.userSatisfied === false) kpiSat.textContent = "Not Satisfied";
+      else kpiSat.textContent = "Unknown";
+      renderRewardChart();
+      renderCompareChart();
+    }
+
+    function renderRewardChart() {
+      const w = 320;
+      const h = 180;
+      const m = 20;
+      const vals = steps.map((s) => s.reward);
+      rewardChart.innerHTML = `<rect x="0" y="0" width="${w}" height="${h}" fill="#0e1530" />`;
+      if (!vals.length) return;
+      const minY = Math.min(...vals, -1);
+      const maxY = Math.max(...vals, 2);
+      const span = Math.max(1e-6, maxY - minY);
+      const xAt = (i) => m + (i * (w - 2 * m)) / Math.max(1, vals.length - 1);
+      const yAt = (v) => h - m - ((v - minY) * (h - 2 * m)) / span;
+      const points = vals.map((v, i) => `${xAt(i)},${yAt(v)}`).join(" ");
+      rewardChart.innerHTML += `<polyline points="${points}" fill="none" stroke="#64a6ff" stroke-width="2" />`;
+      vals.forEach((v, i) => {
+        rewardChart.innerHTML += `<circle cx="${xAt(i)}" cy="${yAt(v)}" r="3" fill="#31d0aa" />`;
+      });
+      rewardChart.innerHTML += `<line x1="${m}" y1="${h - m}" x2="${w - m}" y2="${h - m}" stroke="#334276" />`;
+      rewardChart.innerHTML += `<line x1="${m}" y1="${m}" x2="${m}" y2="${h - m}" stroke="#334276" />`;
+    }
+
+    function renderCompareChart() {
+      const w = 320;
+      const h = 180;
+      const m = 20;
+      const values = [compareStats.trained, compareStats.random];
+      const labels = ["Trained", "Random"];
+      const maxVal = Math.max(1, ...values);
+      const barW = 70;
+      compareChart.innerHTML = `<rect x="0" y="0" width="${w}" height="${h}" fill="#0e1530" />`;
+      values.forEach((v, i) => {
+        const x = 70 + i * 120;
+        const barH = ((Math.max(0, v) / maxVal) * (h - 2 * m));
+        const y = h - m - barH;
+        const color = i === 0 ? "#31d0aa" : "#ff6f91";
+        compareChart.innerHTML += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="${color}" rx="6" />`;
+        compareChart.innerHTML += `<text x="${x + barW / 2}" y="${h - 5}" fill="#9fb0d0" text-anchor="middle" font-size="11">${labels[i]}</text>`;
+        compareChart.innerHTML += `<text x="${x + barW / 2}" y="${y - 6}" fill="#ecf2ff" text-anchor="middle" font-size="11">${v.toFixed(2)}</text>`;
+      });
+      compareChart.innerHTML += `<line x1="${m}" y1="${h - m}" x2="${w - m}" y2="${h - m}" stroke="#334276" />`;
+    }
+
+    async function resetEnv() {
+      const task = "medium";
+      await postJson("/reset", { task });
+      const ticket = ticketInput.value.trim() || "Received wrong product and need refund urgently";
+      state = { ticket, category: null, priority: null, response: null, resolved: false, userSatisfied: null, userFeedbackTurns: 0 };
+      steps = [];
+      totalReward = 0;
+      awaitingFeedback = false;
+      logBox.textContent = "";
+      chatBox.innerHTML = "";
+      appendChat("user", ticket);
+      appendLog(`RESET with task=${task}`);
       render();
-    </script>
-  </body>
+    }
+
+    async function runOneStep(policyType) {
+      const choice = policyType === "trained" ? chooseTrainedAction(state) : chooseRandomAction(state);
+      const payload = {
+        action: {
+          type: "call_tool",
+          tool_name: choice.tool,
+          arguments: choice.args,
+        },
+      };
+      await postJson("/step", payload);
+      const reward = rewardFor(choice.tool, choice.args, state);
+      state = applyAction(choice.tool, choice.args, state);
+      totalReward += reward;
+      steps.push({ ...choice, reward });
+      appendLog(`[${policyType}] ${choice.tool} ${JSON.stringify(choice.args)} -> reward=${reward.toFixed(2)}`);
+      if (choice.tool === "respond") {
+        appendChat("agent", choice.args.message);
+        awaitingFeedback = true;
+      }
+      if (choice.tool === "resolve" && state.resolved) {
+        appendChat("agent", "Great, your issue is now fully resolved.");
+      }
+      render();
+    }
+
+    async function runPolicy(policyType, maxSteps = 6) {
+      for (let i = 0; i < maxSteps; i += 1) {
+        if (state.resolved) break;
+        await runOneStep(policyType);
+        if (policyType === "trained" && awaitingFeedback) {
+          appendLog("Waiting for user feedback in Continue Chat...");
+          break;
+        }
+      }
+    }
+
+    async function comparePolicies() {
+      const snapshot = { ...state };
+      const userSatisfiedSnapshot = state.userSatisfied;
+
+      let trainedReward = 0;
+      let randomReward = 0;
+
+      await resetEnv();
+      for (let i = 0; i < 6; i += 1) {
+        if (state.resolved) break;
+        const c = chooseTrainedAction(state);
+        const r = rewardFor(c.tool, c.args, state);
+        trainedReward += r;
+        state = applyAction(c.tool, c.args, state);
+        if (c.tool === "respond") {
+          state.userSatisfied = false;
+          state.userFeedbackTurns = (state.userFeedbackTurns || 0) + 1;
+        }
+      }
+      await resetEnv();
+      state.userSatisfied = userSatisfiedSnapshot;
+      for (let i = 0; i < 6; i += 1) {
+        if (state.resolved) break;
+        const c = chooseRandomAction(state);
+        const r = rewardFor(c.tool, c.args, state);
+        randomReward += r;
+        state = applyAction(c.tool, c.args, state);
+      }
+      appendLog(`COMPARE -> trained=${trainedReward.toFixed(2)}, random=${randomReward.toFixed(2)}`);
+      compareStats = { trained: trainedReward, random: randomReward };
+      state = snapshot;
+      render();
+    }
+
+    document.querySelectorAll("[data-preset]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        ticketInput.value = btn.getAttribute("data-preset");
+      });
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", resetEnv);
+    document.getElementById("trainedBtn").addEventListener("click", () => runPolicy("trained"));
+    document.getElementById("randomBtn").addEventListener("click", () => runPolicy("random"));
+    document.getElementById("compareBtn").addEventListener("click", comparePolicies);
+    document.getElementById("chatSendBtn").addEventListener("click", async () => {
+      const text = chatInput.value.trim();
+      if (!text || !awaitingFeedback) return;
+      chatInput.value = "";
+      appendChat("user", text);
+      const sat = parseSatisfaction(text);
+      if (sat === true) {
+        state.userSatisfied = true;
+        awaitingFeedback = false;
+        appendLog("User marked satisfied -> attempting resolve.");
+        await runOneStep("trained");
+      } else {
+        state.userSatisfied = false;
+        state.userFeedbackTurns = (state.userFeedbackTurns || 0) + 1;
+        awaitingFeedback = false;
+        appendLog("User not satisfied -> continue chat with new response.");
+        await runOneStep("trained");
+      }
+      render();
+    });
+
+    ticketInput.value = "Received wrong product and need refund urgently";
+    resetEnv().catch((e) => appendLog(`Init error: ${e.message}`));
+  </script>
+</body>
 </html>

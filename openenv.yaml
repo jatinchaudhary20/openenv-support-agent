@@ -17,12 +17,8 @@ actions:
   - resolve
 
 observation_space:
-  ticket: string
-  category: string
-  priority: string
-  response: string
-  resolved: boolean
-  conversation: list
-  turn_count: integer
+  ticket_state: object
+  reward_breakdown: object
+  event_log: array
 
 reward_range: [-1, 5]
