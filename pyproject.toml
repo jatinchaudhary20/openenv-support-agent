@@ -25,3 +25,11 @@ train = ["torch", "trl", "datasets", "transformers", "accelerate", "bitsandbytes
 
 [tool.openenv]
 entrypoint = "server.app:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["env*", "server*"]
+exclude = ["artifacts*", "templates*", "echo_env_clone*", "__pycache__*"]
