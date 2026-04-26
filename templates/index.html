@@ -20,8 +20,9 @@
       .container { max-width: 1200px; margin: 20px auto; padding: 0 16px; }
       .title { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 14px; }
       .muted { color: var(--muted); font-size: 13px; }
-      .grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; }
+      .grid { display: grid; grid-template-columns: 420px 1fr; gap: 16px; }
       .panel { background: rgba(20,26,46,.88); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+      .subpanel { background:#0f1529; border:1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; }
       .kpis { display:grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin: 10px 0 14px; }
       .kpi { background: var(--card); border:1px solid var(--border); border-radius: 10px; padding: 10px; }
       .kpi .v { font-size: 22px; font-weight: 700; margin-top: 4px; }
@@ -37,6 +38,12 @@
       pre { background:#0f1529; border:1px solid var(--border); color:#c9d6ff; padding:8px; border-radius:8px; overflow:auto; }
       .chart { margin-top: 10px; background:#0f1529; border:1px solid var(--border); border-radius: 10px; padding:8px; }
       .compare { display:grid; grid-template-columns: repeat(2,1fr); gap:8px; }
+      .chatbox { background:#0f1529; border:1px solid var(--border); border-radius:10px; padding:8px; min-height:140px; max-height:240px; overflow:auto; }
+      .chatline { margin: 6px 0; }
+      .chat-user { color: #9ed0ff; }
+      .chat-agent { color: #b5f7c3; }
+      .tiny { font-size: 12px; color: var(--muted); }
+      input[type="text"] { width: 100%; border-radius: 8px; background: #0f1529; color: var(--text); border:1px solid var(--border); padding: 8px; }
       @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2,1fr);} .compare {grid-template-columns:1fr;} }
     </style>
   </head>
@@ -59,20 +66,46 @@
 
       <div class="grid">
         <div class="panel">
-          <label for="ticket"><strong>Ticket Input</strong></label>
-          <textarea id="ticket">Payment failed but money deducted</textarea>
-          <div class="row">
-            <button class="preset" data-ticket="Payment failed but money deducted">Billing preset</button>
-            <button class="preset" data-ticket="Received wrong product, want refund">Refund preset</button>
-            <button class="preset" data-ticket="App crashes when I open it">Technical preset</button>
-            <button class="preset" data-ticket="I am frustrated and angry, refund now!">Angry preset</button>
+          <div class="subpanel">
+            <strong>Ticket Presets</strong>
+            <div class="tiny">All 4 presets grouped here</div>
+            <textarea id="ticket">Payment failed but money deducted</textarea>
+            <div class="row">
+              <button class="preset" data-ticket="Payment failed but money deducted">Billing preset</button>
+              <button class="preset" data-ticket="Received wrong product, want refund">Refund preset</button>
+              <button class="preset" data-ticket="App crashes when I open it">Technical preset</button>
+              <button class="preset" data-ticket="I am frustrated and angry, refund now!">Angry preset</button>
+            </div>
           </div>
-          <div class="row">
-            <button id="resetBtn">Reset</button>
-            <button id="runBtn">Run Trained Policy</button>
-            <button id="runRandomBtn">Run Random Policy</button>
-            <button id="compareBtn">Compare Random vs Trained</button>
+
+          <div class="subpanel">
+            <strong>Main Flow</strong>
+            <div class="tiny">Reset + Run trained grouped here</div>
+            <div class="row">
+              <button id="resetBtn">Reset</button>
+              <button id="runBtn">Run Trained Policy</button>
+            </div>
           </div>
+
+          <div class="subpanel">
+            <strong>Benchmark Flow</strong>
+            <div class="tiny">Run random + Compare grouped here</div>
+            <div class="row">
+              <button id="runRandomBtn">Run Random Policy</button>
+              <button id="compareBtn">Compare Random vs Trained</button>
+            </div>
+          </div>
+
+          <div class="subpanel">
+            <strong>Continue Chat</strong>
+            <div class="tiny">Agent asks if satisfied. Type "satisfied" to enable resolve reward.</div>
+            <div class="chatbox" id="chatbox"></div>
+            <div class="row">
+              <input id="chatInput" type="text" placeholder='Type user reply, e.g. "not satisfied" or "satisfied"' />
+              <button id="chatSendBtn">Continue Chat</button>
+            </div>
+          </div>
+
           <p id="status" class="muted">Idle</p>
           <div class="chart">
             <div class="muted">Reward per Step</div>
@@ -104,6 +137,7 @@
       let state = {};
       let totalScore = 0;
       let logs = [];
+      let chat = [];
 
       const statusEl = document.getElementById("status");
       const logsEl = document.getElementById("logs");
@@ -113,6 +147,8 @@
       const kEmp = document.getElementById("kEmp");
       const rewardChart = document.getElementById("rewardChart");
       const breakdownChart = document.getElementById("breakdownChart");
+      const chatboxEl = document.getElementById("chatbox");
+      const chatInputEl = document.getElementById("chatInput");
 
       function expectedLabels(ticket) {
         const t = (ticket || "").toLowerCase();
@@ -134,7 +170,9 @@
           const msg = (args.message || "").toLowerCase();
           e = EMPATHY_TERMS.some(x => msg.includes(x)) ? 1 : 0.2;
         } else if (tool === "resolve") {
-          pen = st.category && st.priority && st.response ? 2 : -1;
+          // Resolve reward only if user confirmed satisfaction.
+          if (st.userSatisfied && st.category && st.priority && st.response) pen = 2;
+          else pen = 0;
         }
         return { classification:c, priority:p, empathy:e, penalty:pen, total:c+p+e+pen };
       }
@@ -142,8 +180,15 @@
         const n = { ...st };
         if (tool === "classify") { n.category = args.category; n.priority = args.priority; }
         else if (tool === "respond") { n.response = args.message; }
-        else if (tool === "resolve" && n.category && n.priority && n.response) { n.resolved = true; }
+        else if (tool === "resolve" && n.userSatisfied && n.category && n.priority && n.response) { n.resolved = true; }
         return n;
+      }
+      function trainedResponse(st) {
+        const sentimentTag = sentiment(st.ticket) === "angry" ? "I completely understand your frustration. " : "I understand your concern. ";
+        if (!st.response) {
+          return `${sentimentTag}I am sorry for the inconvenience. Proposed solution: we will process this immediately. Are you satisfied with this solution?`;
+        }
+        return `${sentimentTag}Updated solution: I can escalate priority and provide a faster resolution path. Are you satisfied now?`;
       }
       function chooseTrainedAction(st) {
         const t = (st.ticket || "").toLowerCase();
@@ -152,7 +197,9 @@
           if (t.includes("refund") || t.includes("wrong")) return { tool_name:"classify", arguments:{category:"refund", priority:"medium"} };
           return { tool_name:"classify", arguments:{category:"technical", priority:"high"} };
         }
-        if (!st.response) return { tool_name:"respond", arguments:{message:"I understand your issue and I am sorry for the inconvenience. We are fixing this now."} };
+        if (!st.response || !st.userSatisfied) {
+          return { tool_name:"respond", arguments:{message: trainedResponse(st)} };
+        }
         return { tool_name:"resolve", arguments:{} };
       }
       function chooseRandomAction() {
@@ -160,10 +207,10 @@
           { tool_name:"classify", arguments:{category:"billing", priority:"medium"} },
           { tool_name:"classify", arguments:{category:"refund", priority:"medium"} },
           { tool_name:"classify", arguments:{category:"technical", priority:"high"} },
-          { tool_name:"respond", arguments:{message:"Issue noted. Working on it."} },
-          { tool_name:"respond", arguments:{message:"I understand and I am sorry. We are resolving this now."} },
-          { tool_name:"resolve", arguments:{} },
+          { tool_name:"respond", arguments:{message:"Issue noted. Proposed fix sent. Are you satisfied?"} },
+          { tool_name:"respond", arguments:{message:"I understand and I am sorry. Proposed fix: refund + expedited handling. Are you satisfied?"} },
         ];
+        if (state.userSatisfied) actions.push({ tool_name:"resolve", arguments:{} });
         return actions[Math.floor(Math.random() * actions.length)];
       }
       async function postJson(path, body) {
@@ -209,6 +256,13 @@
         breakdownChart.innerHTML = svg;
       }
 
+      function renderChat() {
+        chatboxEl.innerHTML = chat.map((m) => {
+          const cls = m.role === "user" ? "chat-user" : "chat-agent";
+          return `<div class="chatline ${cls}"><strong>${m.role === "user" ? "User" : "Agent"}:</strong> ${m.text}</div>`;
+        }).join("");
+      }
+
       function render() {
         const empathyVals = logs.map(l => l.breakdown.empathy);
         const empathyAvg = empathyVals.length ? empathyVals.reduce((a,b)=>a+b,0)/empathyVals.length : 0;
@@ -226,29 +280,41 @@
         `).join("");
         drawRewardChart();
         drawBreakdownChart();
+        renderChat();
       }
 
       async function resetEnv() {
         const ticket = document.getElementById("ticket").value.trim();
         if (!ticket) throw new Error("Please enter a ticket.");
         await postJson("/reset", { ticket });
-        state = { ticket, category:null, priority:null, response:null, resolved:false };
+        state = { ticket, category:null, priority:null, response:null, resolved:false, userSatisfied:false };
         totalScore = 0;
         logs = [];
+        chat = [{ role:"user", text: ticket }];
+        render();
+      }
+
+      async function runOneStep(mode) {
+        if (!state.ticket) throw new Error("Reset environment first.");
+        if (state.resolved) return;
+        const action = mode === "random" ? chooseRandomAction() : chooseTrainedAction(state);
+        await postJson("/step", { action: { type:"call_tool", tool_name: action.tool_name, arguments: action.arguments } });
+        const breakdown = rewardForAction(state, action.tool_name, action.arguments);
+        state = applyAction(state, action.tool_name, action.arguments);
+        totalScore += breakdown.total;
+        logs.push({ step: logs.length + 1, mode, action, reward: breakdown.total, breakdown, state: { ...state } });
+        if (action.tool_name === "respond") chat.push({ role:"agent", text: action.arguments.message });
+        if (action.tool_name === "resolve" && state.resolved) chat.push({ role:"agent", text:"Great, marking this ticket as resolved." });
         render();
       }
 
       async function runPolicy(mode) {
-        if (!state.ticket) throw new Error("Reset environment first.");
         for (let i = 0; i < MAX_STEPS; i++) {
           if (state.resolved) break;
-          const action = mode === "random" ? chooseRandomAction() : chooseTrainedAction(state);
-          await postJson("/step", { action: { type:"call_tool", tool_name: action.tool_name, arguments: action.arguments } });
-          const breakdown = rewardForAction(state, action.tool_name, action.arguments);
-          state = applyAction(state, action.tool_name, action.arguments);
-          totalScore += breakdown.total;
-          logs.push({ step: logs.length + 1, mode, action, reward: breakdown.total, breakdown, state: { ...state } });
-          render();
+          await runOneStep(mode);
+          // Stop after agent response until user continues chat, unless already satisfied.
+          const last = logs[logs.length - 1];
+          if (last && last.action.tool_name === "respond" && !state.userSatisfied) break;
         }
       }
 
@@ -256,7 +322,7 @@
         const ticket = document.getElementById("ticket").value.trim();
         const run = async (mode) => {
           await postJson("/reset", { ticket });
-          let s = { ticket, category:null, priority:null, response:null, resolved:false };
+          let s = { ticket, category:null, priority:null, response:null, resolved:false, userSatisfied:true };
           let total = 0;
           let steps = 0;
           for (let i = 0; i < MAX_STEPS; i++) {
@@ -294,6 +360,28 @@
       document.getElementById("compareBtn").addEventListener("click", async () => {
         try { statusEl.className = "muted"; statusEl.textContent = "Comparing policies..."; await comparePolicies(); statusEl.className = "ok"; statusEl.textContent = "Comparison ready."; }
         catch (e) { statusEl.className = "bad"; statusEl.textContent = e.message; }
+      });
+      document.getElementById("chatSendBtn").addEventListener("click", async () => {
+        try {
+          if (!state.ticket) throw new Error("Reset environment first.");
+          const msg = chatInputEl.value.trim();
+          if (!msg) throw new Error("Enter a chat message.");
+          chat.push({ role:"user", text: msg });
+          chatInputEl.value = "";
+          const lower = msg.toLowerCase();
+          state.userSatisfied = lower.includes("satisfied") || lower.includes("yes");
+          statusEl.className = "muted";
+          statusEl.textContent = state.userSatisfied
+            ? "User marked satisfied. Agent can resolve now."
+            : "User not satisfied. Agent will continue with classify/respond flow.";
+          await runOneStep("trained");
+          if (state.userSatisfied && !state.resolved) await runOneStep("trained");
+          statusEl.className = "ok";
+          statusEl.textContent = "Chat continued.";
+        } catch (e) {
+          statusEl.className = "bad";
+          statusEl.textContent = e.message;
+        }
       });
 
       render();
