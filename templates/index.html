@@ -290,6 +290,9 @@
     }
 
     function chooseTrainedAction(st) {
+      if (st.escalated) {
+        return { tool: "respond", args: { message: "We have raised your issue and a support person will contact you further." } };
+      }
       if (!st.category) {
         const e = expectedLabels(st.ticket || "");
         return { tool: "classify", args: e };
@@ -325,6 +328,15 @@
       });
       if (!res.ok) throw new Error(`${path} failed (${res.status})`);
       return await res.json();
+    }
+
+    function extractToolPayload(stepResponse) {
+      const observation = (stepResponse && stepResponse.observation) || {};
+      const result = observation.result || {};
+      const structured = result.structured_content || {};
+      const nested = structured.result;
+      if (nested && typeof nested === "object") return nested;
+      return {};
     }
 
     function render() {
@@ -416,9 +428,21 @@
           arguments: choice.args,
         },
       };
-      await postJson("/step", payload);
-      const reward = rewardFor(choice.tool, choice.args, state);
-      state = applyAction(choice.tool, choice.args, state);
+      const stepResponse = await postJson("/step", payload);
+      const backendPayload = extractToolPayload(stepResponse);
+      const reward = typeof backendPayload.step_reward === "number"
+        ? backendPayload.step_reward
+        : rewardFor(choice.tool, choice.args, state);
+      const nextState = applyAction(choice.tool, choice.args, state);
+      if (
+        backendPayload.ticket_state &&
+        typeof backendPayload.ticket_state === "object" &&
+        (backendPayload.ticket_state.ticket || "") === (state.ticket || "")
+      ) {
+        state = { ...nextState, ...backendPayload.ticket_state, ticket: state.ticket };
+      } else {
+        state = nextState;
+      }
       totalReward += reward;
       steps.push({ ...choice, reward });
       appendLog(`[${policyType}] ${choice.tool} ${JSON.stringify(choice.args)} -> reward=${reward.toFixed(2)}`);
@@ -499,6 +523,22 @@
       appendChat("user", text);
       const emotion = inferUserEmotion(text);
       appendLog(`Detected user emotion: ${emotion}`);
+      const feedbackPayload = {
+        action: {
+          type: "call_tool",
+          tool_name: "feedback",
+          arguments: { message: text },
+        },
+      };
+      const feedbackResponse = await postJson("/step", feedbackPayload);
+      const backendFeedback = extractToolPayload(feedbackResponse);
+      if (
+        backendFeedback.ticket_state &&
+        typeof backendFeedback.ticket_state === "object" &&
+        (backendFeedback.ticket_state.ticket || "") === (state.ticket || "")
+      ) {
+        state = { ...state, ...backendFeedback.ticket_state, ticket: state.ticket };
+      }
       const sat = parseSatisfaction(text);
       if (sat === true) {
         state.userSatisfied = true;

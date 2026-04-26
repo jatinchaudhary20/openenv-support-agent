@@ -6,18 +6,30 @@ from openenv.core.env_server.types import Action, Observation, State as EnvState
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
+from env.ticket_generator import TicketGenerator
+from env.llm_judge import LLMJudge
+
 class TicketState(BaseModel):
     ticket: str
+    expected_category: str = ""
+    expected_priority: str = ""
     category: Optional[str] = None
     priority: Optional[str] = None
     response: Optional[str] = None
     resolved: bool = False
     conversation: List[Dict[str, str]] = Field(default_factory=list)
     turn_count: int = 0
+    user_satisfied: Optional[bool] = None
+    emotion: str = "neutral"
+    negative_streak: int = 0
+    escalated: bool = False
 
 class SupportEnv(MCPEnvironment):
     def __init__(self):
         mcp = FastMCP("support_env")
+        
+        self.ticket_generator = TicketGenerator()
+        self.llm_judge = LLMJudge()
 
         @mcp.tool
         def classify(category: str, priority: str) -> str:
@@ -29,7 +41,9 @@ class SupportEnv(MCPEnvironment):
             self.ticket_state.priority = priority_norm
             self._advance_turn("assistant", f"classified={category_norm}, priority={priority_norm}")
 
-            expected_category, expected_priority = self._expected_labels(self.ticket_state.ticket)
+            expected_category = self.ticket_state.expected_category
+            expected_priority = self.ticket_state.expected_priority
+            
             self.latest_reward += self._classification_reward(category_norm, expected_category)
             self.latest_reward += self._priority_reward(priority_norm, expected_priority)
             self.last_reward_breakdown = {
@@ -38,13 +52,13 @@ class SupportEnv(MCPEnvironment):
                 "empathy": 0.0,
                 "resolution": 0.0,
             }
-            return f"Ticket classified as {category_norm} with priority {priority_norm}"
+            return str(self._tool_payload(f"Ticket classified as {category_norm} with priority {priority_norm}"))
 
         @mcp.tool
         def respond(message: str) -> str:
             """Respond to the customer."""
             self.ticket_state.response = message
-            empathy = self._empathy_reward(message)
+            empathy = self.llm_judge.evaluate_empathy(self.ticket_state.ticket, message)
             self.latest_reward += empathy
             self._advance_turn("assistant", message)
             self.last_reward_breakdown = {
@@ -53,13 +67,66 @@ class SupportEnv(MCPEnvironment):
                 "empathy": empathy,
                 "resolution": 0.0,
             }
-            return f"Responded with: {message}"
+            return str(self._tool_payload(f"Responded with: {message}"))
+
+        @mcp.tool
+        def feedback(message: str) -> str:
+            """Capture customer feedback sentiment/satisfaction for next decision."""
+            user_text = message.strip()
+            lowered = user_text.lower()
+            negative_terms = ["not satisfied", "no", "still", "issue", "problem", "doesn't work", "dont work", "didn't help", "didnt help", "bad"]
+            positive_terms = ["satisfied", "yes", "resolved", "works", "fixed", "thank you", "thanks"]
+            high_negative_terms = ["furious", "angry", "frustrated", "worst", "unacceptable", "terrible"]
+
+            if any(term in lowered for term in high_negative_terms):
+                self.ticket_state.emotion = "high_negative"
+            elif any(term in lowered for term in negative_terms):
+                self.ticket_state.emotion = "negative"
+            elif any(term in lowered for term in positive_terms):
+                self.ticket_state.emotion = "positive"
+            else:
+                self.ticket_state.emotion = "neutral"
+
+            if any(term in lowered for term in positive_terms) and not any(term in lowered for term in negative_terms):
+                self.ticket_state.user_satisfied = True
+                self.ticket_state.negative_streak = 0
+            else:
+                self.ticket_state.user_satisfied = False
+                self.ticket_state.negative_streak += 1
+
+            if self.ticket_state.negative_streak >= 3 and not self.ticket_state.resolved:
+                self.ticket_state.escalated = True
+                self._advance_turn("assistant", "We have raised your issue and a support person will contact you further.")
+                self.done = True
+
+            self._advance_turn("customer", user_text)
+            self.last_reward_breakdown = {
+                "classification": 0.0,
+                "priority": 0.0,
+                "empathy": 0.0,
+                "resolution": 0.0,
+            }
+            return str(self._tool_payload("Feedback recorded."))
 
         @mcp.tool
         def resolve() -> str:
             """Mark the ticket as resolved."""
             resolution = -1.0
-            if self.ticket_state.response and self.ticket_state.category and self.ticket_state.priority:
+            if self.ticket_state.escalated:
+                self.done = True
+                self.last_reward_breakdown = {
+                    "classification": 0.0,
+                    "priority": 0.0,
+                    "empathy": 0.0,
+                    "resolution": 0.0,
+                }
+                return str(self._tool_payload("Issue already escalated to human support."))
+            if (
+                self.ticket_state.user_satisfied is True
+                and self.ticket_state.response
+                and self.ticket_state.category
+                and self.ticket_state.priority
+            ):
                 self.ticket_state.resolved = True
                 resolution = 2.0
                 self.latest_reward += resolution
@@ -70,7 +137,7 @@ class SupportEnv(MCPEnvironment):
                     "empathy": 0.0,
                     "resolution": resolution,
                 }
-                return "Ticket successfully resolved."
+                return str(self._tool_payload("Ticket successfully resolved."))
             self.latest_reward += resolution
             self.last_reward_breakdown = {
                 "classification": 0.0,
@@ -78,7 +145,7 @@ class SupportEnv(MCPEnvironment):
                 "empathy": 0.0,
                 "resolution": resolution,
             }
-            return "Cannot resolve without classification, priority, and response."
+            return str(self._tool_payload("Cannot resolve without satisfaction, classification, priority, and response."))
 
         super().__init__(mcp)
         self._state = EnvState(episode_id=str(uuid4()), step_count=0)
@@ -90,15 +157,14 @@ class SupportEnv(MCPEnvironment):
         self.max_turns = 6
 
     def reset(self, task: str = "easy", **kwargs: Any) -> Observation:
-        if task == "easy":
-            ticket = "Payment failed but money deducted"
-        elif task == "medium":
-            ticket = "Received wrong product, want refund"
-        else:
-            ticket = "App crashes when I open it"
+        ticket_data = self.ticket_generator.generate(task=task)
 
-        self.ticket_state = TicketState(ticket=ticket)
-        self.ticket_state.conversation.append({"role": "customer", "message": ticket})
+        self.ticket_state = TicketState(
+            ticket=ticket_data["ticket"],
+            expected_category=ticket_data["expected_category"],
+            expected_priority=ticket_data["expected_priority"]
+        )
+        self.ticket_state.conversation.append({"role": "customer", "message": ticket_data["ticket"]})
         self._state = EnvState(episode_id=str(uuid4()), step_count=0)
         self.latest_reward = 0.0
         self.last_reward_breakdown = {}
@@ -118,7 +184,6 @@ class SupportEnv(MCPEnvironment):
         # Super step executes the FastMCP tool
         obs = super().step(action, timeout_s=timeout_s, **kwargs)
         
-        # Override observation with our environment specifics
         obs.reward = self.latest_reward
         if self.ticket_state.turn_count >= self.max_turns and not self.ticket_state.resolved:
             self.done = True
@@ -152,89 +217,26 @@ class SupportEnv(MCPEnvironment):
     def state(self) -> EnvState:
         return self._state
 
-    def _expected_labels(self, ticket: str) -> tuple[str, str]:
-        ticket_lower = ticket.lower()
-        billing_terms = {
-            "payment",
-            "bill",
-            "billing",
-            "charged",
-            "charge",
-            "invoice",
-            "deducted",
-            "transaction",
-            "upi",
-            "card",
-            "wallet",
-            "subscription",
-        }
-        refund_terms = {
-            "refund",
-            "wrong product",
-            "return",
-            "replacement",
-            "cancel order",
-            "cancelled order",
-            "order issue",
-            "defective",
-            "damaged",
-            "not received",
-        }
-        technical_terms = {
-            "crash",
-            "bug",
-            "error",
-            "issue logging in",
-            "login",
-            "otp",
-            "app not opening",
-            "not opening",
-            "slow",
-            "freeze",
-            "stuck",
-            "failed to load",
-            "server down",
-        }
-        urgent_terms = {
-            "urgent",
-            "asap",
-            "immediately",
-            "furious",
-            "angry",
-            "frustrated",
-            "worst",
-            "unacceptable",
-        }
-
-        if any(term in ticket_lower for term in refund_terms):
-            category = "refund"
-        elif any(term in ticket_lower for term in billing_terms):
-            category = "billing"
-        elif any(term in ticket_lower for term in technical_terms):
-            category = "technical"
-        else:
-            category = "technical"
-
-        priority = "high" if category == "technical" or any(term in ticket_lower for term in urgent_terms) else "medium"
-        return category, priority
-
     def _classification_reward(self, predicted: str, expected: str) -> float:
         return 1.0 if predicted == expected else -0.5
 
     def _priority_reward(self, predicted: str, expected: str) -> float:
         return 1.0 if predicted == expected else -0.5
 
-    def _empathy_reward(self, message: str) -> float:
-        text = message.lower()
-        empathy_terms = ["sorry", "understand", "apologize", "thanks", "assist"]
-        return 1.0 if any(term in text for term in empathy_terms) else 0.2
-
     def _advance_turn(self, role: str, message: str) -> None:
         self.ticket_state.turn_count += 1
         self.ticket_state.conversation.append({"role": role, "message": message})
 
+    def _tool_payload(self, message: str) -> Dict[str, Any]:
+        return {
+            "message": message,
+            "ticket_state": self.ticket_state.model_dump(),
+            "step_reward": self.latest_reward,
+            "reward_breakdown": self.last_reward_breakdown,
+            "done": self.done,
+        }
+
     def _step_impl(self, action: Action, timeout_s: Optional[float] = None, **kwargs: Any) -> Observation:
-        # This env only supports MCP tool actions via CallToolAction.
         return Observation(
             done=self.done,
             reward=0.0,
